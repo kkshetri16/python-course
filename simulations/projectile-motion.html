@@ -1,0 +1,1163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Projectile Motion: Free Fall Comparison Lab</title>
+    <link rel="icon" type="image/png" href="webicon.png">
+    <style>
+        :root {
+            --bg: #FFFFE0;
+            --panel-bg: rgba(255,255,230,0.92);
+            --blue: #0066cc;
+            --blue-glow: rgba(0,102,204,0.35);
+            --green: #00aa66;
+            --red: #ff2e63;
+            --orange: #ff8800;
+            --magenta: #d63aaa;
+            --text: #1a1a2e;
+            --border: rgba(0,0,0,0.13);
+            --muted: rgba(0,102,204,0.18);
+        }
+        * { box-sizing: border-box; user-select: none; -webkit-font-smoothing: antialiased; margin: 0; padding: 0; }
+        body {
+            font-family: 'Arial', sans-serif; background: var(--bg); color: var(--text);
+            margin: 0; height: 100vh; overflow: hidden;
+        }
+        #app-wrapper {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            transform-origin: 0 0; overflow: hidden;
+            display: flex; flex-direction: column; background-color: var(--bg);
+        }
+        header { position: absolute; top: 20px; left: 30px; z-index: 10; pointer-events: none; }
+        h1 {
+            margin: 0; font-size: 2.4rem; font-weight: 700; letter-spacing: 3px;
+            text-transform: uppercase; color: var(--blue);
+            text-shadow: 0 0 18px rgba(0,102,204,0.25);
+        }
+        h1 span { color: #888; font-weight: 400; font-size: 1rem; display: block; letter-spacing: 4px; margin-top: -4px; }
+        .viewport { flex: 1; position: relative; width: 100%; height: 100%; }
+
+
+        canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+        canvas:active { cursor: grabbing; }
+        .controls-container {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            width: 95%; max-width: 1300px;
+            background: var(--panel-bg); backdrop-filter: blur(14px);
+            border: 1px solid var(--border); border-radius: 12px; padding: 15px 20px;
+            display: flex; flex-wrap: wrap; gap: 15px; align-items: center; justify-content: center;
+            z-index: 20; box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+        }
+        .btn {
+            padding: 8px 14px; background: transparent; border: 1.5px solid var(--blue);
+            color: var(--blue); border-radius: 6px; font-weight: 600; font-size: 0.8rem;
+            letter-spacing: 0.5px; text-transform: uppercase; cursor: pointer; transition: all 0.2s;
+            display: flex; align-items: center; justify-content: center; gap: 4px;
+        }
+        .btn:hover { box-shadow: 0 0 8px var(--blue-glow); background: var(--muted); }
+        .btn.active { background: var(--blue); color: #fff; box-shadow: 0 0 12px var(--blue-glow); }
+        .btn.active-green { border-color: var(--green); color: var(--green); }
+        .btn.active-green.playing { background: var(--green); color: #fff; box-shadow: 0 0 15px rgba(0,170,102,0.4); }
+        .btn.active-red { border-color: var(--red); color: var(--red); }
+        .btn.active-red:hover { background: rgba(255,46,99,0.1); box-shadow: 0 0 12px rgba(255,46,99,0.3); }
+        .btn.active-orange { border-color: var(--orange); color: var(--orange); }
+        .btn.active-orange.paused { background: var(--orange); color: #fff; box-shadow: 0 0 12px rgba(255,136,0,0.4); }
+        .slider-group { width: 145px; display: flex; flex-direction: column; gap: 4px; }
+        .slider-header { display: flex; justify-content: space-between; font-size: 0.72rem; letter-spacing: 0.3px; color: var(--blue); font-weight: bold; }
+        .slider-val { font-weight: 700; color: #333; font-size: 0.72rem; }
+        .divider { width: 1px; height: 35px; background: var(--border); }
+        .mode-group { display: flex; gap: 8px; align-items: center; }
+        input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%;
+            background: var(--blue); cursor: pointer; margin-top: -6px;
+            box-shadow: 0 0 8px var(--blue-glow); border: 2px solid #fff; transition: transform 0.1s;
+        }
+        input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.15); }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 4px; background: rgba(0,0,0,0.15); border-radius: 2px;
+        }
+        #loader {
+            position: fixed; inset: 0; background: var(--bg); z-index: 200;
+            display: flex; align-items: center; justify-content: center;
+            flex-direction: column; gap: 18px; transition: opacity 0.6s;
+        }
+        #loader h2 { font-family: 'Arial', sans-serif; font-size: 1.8rem; color: var(--blue); letter-spacing: 4px; }
+        .loader-bar { width: 280px; height: 3px; background: #ddd; border-radius: 2px; overflow: hidden; }
+        .loader-fill { height: 100%; background: var(--blue); animation: loadFill 0.8s ease-out forwards; }
+        @keyframes loadFill { from { width: 0 } to { width: 100% } }
+
+
+        /* Floating data panels — projectile (top-right) and free-fall (right, below) */
+        .data-panel {
+            position: absolute; right: 25px; z-index: 12;
+            background: rgba(255,255,240,0.92); backdrop-filter: blur(8px);
+            border: 1px solid var(--border); border-radius: 12px;
+            padding: 14px 18px; min-width: 220px;
+            box-shadow: 0 8px 22px rgba(0,0,0,0.12);
+            font-family: 'Arial', monospace; font-size: 0.85rem;
+        }
+        .data-panel.proj { top: 100px; border-left: 4px solid var(--blue); }
+        .data-panel.fall { top: 320px; border-left: 4px solid #555; }
+        .data-panel.fall.hidden { display: none; }
+        .data-panel .title {
+            font-size: 0.78rem; font-weight: 700; letter-spacing: 2px;
+            text-transform: uppercase; margin-bottom: 8px;
+            padding-bottom: 6px; border-bottom: 1px solid var(--border);
+        }
+        .data-panel.proj .title { color: var(--blue); }
+        .data-panel.fall .title { color: #555; }
+        .data-panel .row {
+            display: flex; justify-content: space-between; gap: 16px;
+            font-size: 0.78rem; line-height: 1.6;
+        }
+        .data-panel .row .lab { color: #555; font-weight: 600; letter-spacing: 0.5px; }
+        .data-panel .row .val { color: #222; font-weight: 700; }
+
+        /* Vector legend (bottom-left, above controls) */
+        .vec-legend {
+            position: absolute; left: 25px; bottom: 110px; z-index: 12;
+            background: rgba(255,255,240,0.92); backdrop-filter: blur(8px);
+            border: 1px solid var(--border); border-radius: 10px;
+            padding: 10px 14px; font-size: 0.72rem;
+            display: flex; flex-direction: column; gap: 5px;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.1);
+        }
+        .vec-legend .item { display: flex; align-items: center; gap: 8px; }
+        .vec-legend .swatch { width: 20px; height: 3px; border-radius: 2px; }
+        .vec-legend .label-text { color: #333; font-weight: 600; }
+
+        /* HUD label (status banner like other sims) */
+        #flight-status {
+            position: absolute; top: 95px; left: 50%; transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.95); padding: 8px 25px; border-radius: 10px;
+            border: 2px solid var(--green); color: var(--green); font-weight: bold;
+            text-transform: uppercase; letter-spacing: 1.5px; opacity: 0; transition: all 0.3s;
+            pointer-events: none; box-shadow: 0 0 30px rgba(0,170,102,0.3); font-size: 0.85rem;
+            z-index: 13;
+        }
+        #flight-status.visible { opacity: 1; }
+        #flight-status.landed { border-color: #b87800; color: #b87800; box-shadow: 0 0 30px rgba(255,170,0,0.3); }
+
+        /* Vector arrow text labels (overlay positioned via JS) */
+        .vec-label {
+            position: absolute; pointer-events: none;
+            font-family: 'Arial', monospace; font-size: 0.7rem;
+            font-weight: 700; padding: 2px 6px; border-radius: 4px;
+            background: rgba(255,255,240,0.9); border: 1px solid rgba(0,0,0,0.1);
+            white-space: nowrap; transform: translate(-50%, -50%);
+            z-index: 11; opacity: 0; transition: opacity 0.15s;
+        }
+        .vec-label.visible { opacity: 1; }
+        .vec-label.vx { color: #00aa66; border-color: rgba(0,170,102,0.3); }
+        .vec-label.vy { color: #555; border-color: rgba(85,85,85,0.3); }
+        .vec-label.vres { color: #d63aaa; border-color: rgba(214,58,170,0.3); }
+        .vec-label.vfall { color: #cc7700; border-color: rgba(204,119,0,0.3); }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+
+<body>
+    <div id="app-wrapper">
+        <div id="loader">
+            <h2>INITIALIZING UNISON...</h2>
+            <div class="loader-bar"><div class="loader-fill"></div></div>
+        </div>
+        <header>
+            <h1>Projectile Motion <span>Free Fall Comparison Lab</span></h1>
+        </header>
+        <div class="viewport" id="canvas-container">
+            <div id="flight-status">In Flight</div>
+
+            <div class="data-panel proj">
+                <div class="title">Projectile</div>
+                <div class="row"><span class="lab">Time</span><span class="val" id="pTime">0.00 s</span></div>
+                <div class="row"><span class="lab">|V|</span><span class="val" id="pVMag">0.00 m/s</span></div>
+                <div class="row"><span class="lab">Vx</span><span class="val" id="pVx">0.00 m/s</span></div>
+                <div class="row"><span class="lab">Vy</span><span class="val" id="pVy">0.00 m/s</span></div>
+                <div class="row"><span class="lab">X</span><span class="val" id="pX">0.0 m</span></div>
+                <div class="row"><span class="lab">Y</span><span class="val" id="pY">25.0 m</span></div>
+            </div>
+
+            <div class="data-panel fall" id="fallPanel">
+                <div class="title">Free Fall</div>
+                <div class="row"><span class="lab">Height</span><span class="val" id="fH">25.0 m</span></div>
+                <div class="row"><span class="lab">Time</span><span class="val" id="fTime">0.00 s</span></div>
+                <div class="row"><span class="lab">Vy</span><span class="val" id="fVy">0.00 m/s</span></div>
+                <div class="row"><span class="lab">Y</span><span class="val" id="fY">25.0 m</span></div>
+            </div>
+
+            <div class="vec-legend">
+                <div class="item"><div class="swatch" style="background:#00aa66"></div><span class="label-text">Vx — horizontal</span></div>
+                <div class="item"><div class="swatch" style="background:#555"></div><span class="label-text">Vy — vertical</span></div>
+                <div class="item"><div class="swatch" style="background:#d63aaa"></div><span class="label-text">|V| — resultant</span></div>
+                <div class="item"><div class="swatch" style="background:#cc7700"></div><span class="label-text">Vy free-fall</span></div>
+            </div>
+
+            <div class="vec-label vx" id="lblVx"></div>
+            <div class="vec-label vy" id="lblVy"></div>
+            <div class="vec-label vres" id="lblVres"></div>
+            <div class="vec-label vfall" id="lblVfall"></div>
+
+            <div class="controls-container">
+                <div class="mode-group">
+                    <button id="startBtn" class="btn active-green">▶ Start</button>
+                    <button id="pauseBtn" class="btn active-orange">❚❚ Pause</button>
+                    <button id="stepBtn" class="btn">Step ››</button>
+                    <button id="stopBtn" class="btn active-red">■ Stop</button>
+                    <button id="resetBtn" class="btn active-red">↺ Reset</button>
+                </div>
+                <div class="divider"></div>
+                <div class="mode-group">
+                    <button id="togFreeFall" class="btn active">Free Fall: ON</button>
+                    <button id="togVectors" class="btn active">Vectors</button>
+                    <button id="togTrail" class="btn active">Trail</button>
+                </div>
+                <div class="divider"></div>
+                <div class="slider-group">
+                    <div class="slider-header"><span>Velocity (m/s)</span><span id="velDisp" class="slider-val">50.0</span></div>
+                    <input type="range" id="velSlider" min="0" max="100" step="0.5" value="50">
+                </div>
+                <div class="slider-group">
+                    <div class="slider-header"><span>Height (m)</span><span id="hgtDisp" class="slider-val">25.0</span></div>
+                    <input type="range" id="hgtSlider" min="0" max="50" step="0.5" value="25">
+                </div>
+                <div class="slider-group">
+                    <div class="slider-header"><span>Sim Speed</span><span id="spdDisp" class="slider-val">1.0x</span></div>
+                    <input type="range" id="spdSlider" min="0.1" max="2.0" step="0.1" value="1.0">
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+<script>
+/* =========================================================================
+   PROJECTILE MOTION — 3D Free-Fall Comparison Lab (Three.js)
+   - Mirrors the Python sim's logic (start/stop/pause/step/free-fall toggle,
+     spacebar, Vx/Vy/|V|/Vy_fall arrows, sync line, data panels, trail).
+   - Sky-clouds-trees-building 3D environment.
+   ========================================================================= */
+
+const G = 9.81;
+
+class PhysicsEngine {
+    constructor() {
+        this.v0 = 50;          // initial horizontal velocity (m/s)
+        this.h  = 25;          // launch height (m)
+        this.t  = 0;           // current time (s)
+        this.tMax = 0;         // time to land
+        this.x = 0; this.y = this.h;
+        this.vx = 0; this.vy = 0; this.vMag = 0;
+        this.history = [];     // [{x, y}, ...] for projectile trail
+        this.fallHistory = []; // for vertical free-fall trail (just y values)
+        this.recomputeTMax();
+        this.history.push({ x: 0, y: this.h });
+        this.fallHistory.push({ y: this.h });
+    }
+
+    recomputeTMax() {
+        this.tMax = (this.h > 0) ? Math.sqrt(2 * this.h / G) : 0.0001;
+    }
+
+    setParams(v0, h) {
+        this.v0 = v0;
+        const hChanged = Math.abs(this.h - h) > 1e-6;
+        this.h  = h;
+        this.recomputeTMax();
+        if (this.t === 0 || hChanged) {
+            // Snap to launch state when at rest, or if launch height changed mid-flight
+            this.reset();
+        }
+    }
+
+    reset() {
+        this.t  = 0;
+        this.x  = 0; this.y = this.h;
+        this.vx = this.v0; this.vy = 0; this.vMag = this.v0;
+        this.history = [{ x: 0, y: this.h }];
+        this.fallHistory = [{ y: this.h }];
+    }
+
+    step(dt) {
+        if (this.t >= this.tMax) {
+            this.t = this.tMax;
+            this.x  = this.v0 * this.t;
+            this.y  = 0;
+            this.vx = this.v0;
+            this.vy = -G * this.t;
+            this.vMag = Math.hypot(this.vx, this.vy);
+            return;
+        }
+        this.t = Math.min(this.t + dt, this.tMax);
+        this.x  = this.v0 * this.t;
+        this.y  = Math.max(0, this.h - 0.5 * G * this.t * this.t);
+        this.vx = this.v0;
+        this.vy = -G * this.t;
+        this.vMag = Math.hypot(this.vx, this.vy);
+        // Append to trails (only when distance grew enough — keeps geometry small)
+        const lastH = this.history[this.history.length - 1];
+        if (Math.hypot(this.x - lastH.x, this.y - lastH.y) > 0.15) {
+            this.history.push({ x: this.x, y: this.y });
+        }
+        const lastF = this.fallHistory[this.fallHistory.length - 1];
+        if (Math.abs(this.y - lastF.y) > 0.15) this.fallHistory.push({ y: this.y });
+    }
+
+    landed() { return this.t >= this.tMax; }
+}
+
+
+
+/* =====================================================================
+   Renderer3D — Three.js scene with sky, clouds, ground, trees, building,
+                projectile, free-fall ball, trails, velocity arrows.
+   ===================================================================== */
+class Renderer3D {
+    constructor(container, physics) {
+        this.physics = physics;
+        this.toggles = { freeFall: true, vectors: true, trail: true };
+        this.cameraAuto = true;
+
+        // Renderer
+        this.renderer = new THREE.WebGLRenderer({ antialias: true });
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        this.renderer.shadowMap.enabled = true;
+        this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        this.renderer.setClearColor(0xFFFFE0, 1);
+        container.appendChild(this.renderer.domElement);
+
+        // Scene + Camera
+        this.scene = new THREE.Scene();
+        this.scene.fog = new THREE.Fog(0xb8d8ec, 350, 1200);
+
+        this.camera = new THREE.PerspectiveCamera(45, 16/9, 0.1, 4000);
+        this.camera.position.set(60, 40, 180);
+
+        this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
+        this.controls.enableDamping = true;
+        this.controls.dampingFactor = 0.08;
+        this.controls.target.set(60, 18, 0);
+        this.controls.minDistance = 30;
+        this.controls.maxDistance = 600;
+        this.controls.maxPolarAngle = Math.PI * 0.49;
+
+        // Track when user manually orbits, so we stop auto-framing
+        this.controls.addEventListener('start', () => { this.cameraAuto = false; });
+
+        this.clock = new THREE.Clock();
+        this.time = 0;
+
+        this.buildSky();
+        this.buildLights();
+        this.buildGround();
+        this.buildClouds();
+        this.buildTrees();
+        this.buildBuilding();
+        this.buildBalls();
+        this.buildTrails();
+        this.buildArrows();
+        this.buildSyncLine();
+        this.buildAxes();
+
+        this.resize();
+    }
+
+    buildSky() {
+        // Gradient sky dome — bottom fades into the page's yellow body bg
+        const verts = `
+            varying vec3 vWorldPos;
+            void main() {
+                vWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }`;
+        const frags = `
+            uniform vec3 cTop; uniform vec3 cMid; uniform vec3 cBot;
+            varying vec3 vWorldPos;
+            void main() {
+                float h = normalize(vWorldPos).y;
+                vec3 col;
+                if (h > 0.0) col = mix(cMid, cTop, smoothstep(0.0, 0.6, h));
+                else         col = mix(cMid, cBot, smoothstep(0.0, -0.4, h));
+                gl_FragColor = vec4(col, 1.0);
+            }`;
+        const skyMat = new THREE.ShaderMaterial({
+            uniforms: {
+                cTop: { value: new THREE.Color(0x4a90d9) },   // deep sky blue
+                cMid: { value: new THREE.Color(0xb8d8ec) },   // pale blue near horizon
+                cBot: { value: new THREE.Color(0xfff2c0) }    // yellow-ish (matches body)
+            },
+            vertexShader: verts, fragmentShader: frags,
+            side: THREE.BackSide, depthWrite: false
+        });
+        const sky = new THREE.Mesh(new THREE.SphereGeometry(2000, 32, 16), skyMat);
+        this.scene.add(sky);
+    }
+
+    buildLights() {
+        // Sky-tinted hemisphere fill + warm directional sun + soft fill
+        const hemi = new THREE.HemisphereLight(0xbcdfff, 0x6b9c4b, 0.55);
+        this.scene.add(hemi);
+
+        const sun = new THREE.DirectionalLight(0xfff5d6, 1.05);
+        sun.position.set(120, 220, 80);
+        sun.castShadow = true;
+        sun.shadow.mapSize.width = 2048;
+        sun.shadow.mapSize.height = 2048;
+        sun.shadow.camera.near = 10;
+        sun.shadow.camera.far = 700;
+        const ds = 220;
+        sun.shadow.camera.left = -ds; sun.shadow.camera.right = ds;
+        sun.shadow.camera.top  =  ds; sun.shadow.camera.bottom = -ds;
+        sun.shadow.bias = -0.0008;
+        this.scene.add(sun);
+
+        const fill = new THREE.PointLight(0x88aaff, 0.35, 600);
+        fill.position.set(-80, 60, -120);
+        this.scene.add(fill);
+    }
+
+    buildGround() {
+        // Procedural grass texture on a big plane
+        const c = document.createElement('canvas');
+        c.width = c.height = 512;
+        const g = c.getContext('2d');
+        g.fillStyle = '#84a85a'; g.fillRect(0, 0, 512, 512);
+        for (let i = 0; i < 6000; i++) {
+            g.fillStyle = ['#7aa052', '#94b465', '#6f9646', '#a7c279'][i & 3];
+            g.fillRect(Math.random() * 512, Math.random() * 512, 2, 2);
+        }
+        const tex = new THREE.CanvasTexture(c);
+        tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+        tex.repeat.set(40, 40);
+        const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.95, metalness: 0.0 });
+        const ground = new THREE.Mesh(new THREE.PlaneGeometry(2400, 2400), mat);
+        ground.rotation.x = -Math.PI / 2;
+        ground.position.y = 0;
+        ground.receiveShadow = true;
+        this.scene.add(ground);
+
+        // Subtle horizontal grid lines along the X axis (every 10 m)
+        const gridMat = new THREE.LineBasicMaterial({ color: 0x6f9646, transparent: true, opacity: 0.22 });
+        const pts = [];
+        for (let x = -50; x <= 350; x += 10) {
+            pts.push(new THREE.Vector3(x, 0.05, -120));
+            pts.push(new THREE.Vector3(x, 0.05,  120));
+        }
+        const geo = new THREE.BufferGeometry().setFromPoints(pts);
+        this.scene.add(new THREE.LineSegments(geo, gridMat));
+    }
+
+    buildClouds() {
+        // Cloud sprite — a soft canvas blob, scattered & drifting
+        const c = document.createElement('canvas');
+        c.width = 256; c.height = 128;
+        const g = c.getContext('2d');
+        for (let i = 0; i < 12; i++) {
+            const x = 30 + Math.random() * 196, y = 30 + Math.random() * 68;
+            const r = 25 + Math.random() * 38;
+            const grad = g.createRadialGradient(x, y, 0, x, y, r);
+            grad.addColorStop(0, 'rgba(255,255,255,0.95)');
+            grad.addColorStop(0.5, 'rgba(255,255,255,0.55)');
+            grad.addColorStop(1, 'rgba(255,255,255,0)');
+            g.fillStyle = grad; g.fillRect(0, 0, 256, 128);
+        }
+        const cloudTex = new THREE.CanvasTexture(c);
+        this.clouds = [];
+        for (let i = 0; i < 18; i++) {
+            const m = new THREE.SpriteMaterial({
+                map: cloudTex, transparent: true,
+                opacity: 0.82, depthWrite: false
+            });
+            const s = new THREE.Sprite(m);
+            const sx = 60 + Math.random() * 60;
+            s.scale.set(sx, sx * 0.45, 1);
+            s.position.set(
+                -200 + Math.random() * 700,
+                65 + Math.random() * 50,
+                -180 + Math.random() * 360
+            );
+            s.userData.drift = 1.5 + Math.random() * 3;
+            s.userData.startX = s.position.x;
+            this.scene.add(s);
+            this.clouds.push(s);
+        }
+    }
+
+    buildTrees() {
+        // Low-poly trees — instanced for performance, scattered behind/around
+        const trunkGeo = new THREE.CylinderGeometry(0.7, 1.0, 6, 6);
+        const trunkMat = new THREE.MeshStandardMaterial({ color: 0x6b4a2b, roughness: 0.9 });
+        const foliageGeo = new THREE.ConeGeometry(3.5, 9, 7);
+        const foliageMat = new THREE.MeshStandardMaterial({ color: 0x3f7c2c, roughness: 0.85 });
+
+        // Create one canonical tree mesh, then clone-and-position
+        const mkTree = () => {
+            const t = new THREE.Group();
+            const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+            trunk.position.y = 3; trunk.castShadow = true; trunk.receiveShadow = true;
+            t.add(trunk);
+            const f1 = new THREE.Mesh(foliageGeo, foliageMat);
+            f1.position.y = 9; f1.castShadow = true; f1.receiveShadow = true;
+            t.add(f1);
+            const f2 = new THREE.Mesh(foliageGeo, foliageMat);
+            f2.position.y = 13; f2.scale.set(0.78, 0.85, 0.78); f2.castShadow = true;
+            t.add(f2);
+            return t;
+        };
+        // Scatter ~60 trees, denser further from trajectory
+        for (let i = 0; i < 70; i++) {
+            const t = mkTree();
+            const r = 50 + Math.random() * 250;
+            const ang = Math.random() * Math.PI * 2;
+            const x = Math.cos(ang) * r;
+            const z = Math.sin(ang) * r;
+            // Avoid the trajectory corridor (x in [-15, +400], |z| < 20)
+            if (z > -22 && z < 22 && x > -25 && x < 420) continue;
+            t.position.set(x, 0, z);
+            const s = 0.7 + Math.random() * 0.7;
+            t.scale.set(s, s, s);
+            t.rotation.y = Math.random() * Math.PI * 2;
+            this.scene.add(t);
+        }
+    }
+
+
+
+    buildBuilding() {
+        // Building from which the projectile is launched. Width fixed, height tracks h.
+        // Procedural concrete + window pattern texture.
+        const c = document.createElement('canvas');
+        c.width = 256; c.height = 1024;
+        const g = c.getContext('2d');
+        g.fillStyle = '#b3aea0'; g.fillRect(0, 0, 256, 1024);   // concrete
+        // streaks
+        for (let i = 0; i < 200; i++) {
+            g.fillStyle = ['#a39e92','#bdb8aa','#9b9789'][i % 3];
+            g.fillRect(Math.random() * 256, Math.random() * 1024, 1, 8 + Math.random() * 60);
+        }
+        // window grid (rows of 2)
+        for (let row = 1; row < 14; row++) {
+            for (let col = 0; col < 2; col++) {
+                const x = 50 + col * 110;
+                const y = row * 70 + 10;
+                g.fillStyle = '#243845';
+                g.fillRect(x, y, 60, 36);
+                g.fillStyle = '#5d8aa8';
+                g.fillRect(x + 3, y + 3, 54, 30);
+                g.strokeStyle = '#aaa'; g.lineWidth = 1;
+                g.beginPath(); g.moveTo(x + 30, y + 3); g.lineTo(x + 30, y + 33); g.stroke();
+                g.beginPath(); g.moveTo(x + 3, y + 18); g.lineTo(x + 57, y + 18); g.stroke();
+            }
+        }
+        const tex = new THREE.CanvasTexture(c);
+        tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+        const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85, metalness: 0.05 });
+        const matSide = new THREE.MeshStandardMaterial({ color: 0xa39e92, roughness: 0.9 });
+        const matRoof = new THREE.MeshStandardMaterial({ color: 0x6e5b46, roughness: 0.85 });
+
+        // Building geometry — width 12, depth 12, height = h (set later via setBuilding)
+        this.building = new THREE.Group();
+        const W = 12, D = 12;
+        this.buildingW = W; this.buildingD = D;
+        // 6 distinct materials so the textured face is on +Z (towards camera/trajectory side)
+        const mats = [matSide, matSide, matRoof, matSide, mat, matSide];
+        const geo = new THREE.BoxGeometry(W, 1, D);
+        const mesh = new THREE.Mesh(geo, mats);
+        mesh.castShadow = true; mesh.receiveShadow = true;
+        this.buildingMesh = mesh;
+        this.building.add(mesh);
+
+        // Roof rim
+        const rim = new THREE.Mesh(
+            new THREE.BoxGeometry(W + 1.5, 0.6, D + 1.5),
+            new THREE.MeshStandardMaterial({ color: 0x4a3a2a, roughness: 0.85 })
+        );
+        rim.castShadow = true; rim.receiveShadow = true;
+        this.buildingRim = rim;
+        this.building.add(rim);
+
+        // Position so launch point is at (0, h, 0); building extends to the LEFT in -x
+        // (matches Python where building is at x ∈ [-10, 0], launch at x=0)
+        this.building.position.set(-W/2, 0, 0);
+        this.scene.add(this.building);
+        this.setBuildingHeight(this.physics.h);
+    }
+
+    setBuildingHeight(h) {
+        h = Math.max(0.5, h);
+        // Rebuild geometry to match height (cleaner than scaling — keeps texture aspect)
+        if (this.buildingMesh.geometry) this.buildingMesh.geometry.dispose();
+        this.buildingMesh.geometry = new THREE.BoxGeometry(this.buildingW, h, this.buildingD);
+        this.buildingMesh.position.y = h / 2;
+        this.buildingRim.position.y  = h + 0.3;
+    }
+
+    buildBalls() {
+        // Projectile (red, glossy)
+        const projGeo = new THREE.SphereGeometry(1.4, 32, 24);
+        const projMat = new THREE.MeshStandardMaterial({
+            color: 0xe53939, emissive: 0x661111, roughness: 0.35, metalness: 0.25
+        });
+        this.proj = new THREE.Mesh(projGeo, projMat);
+        this.proj.castShadow = true;
+        this.scene.add(this.proj);
+
+        // Ground-shadow dot (small dark disk under projectile, follows ground X)
+        const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.25, depthWrite: false });
+        const shadowGeo = new THREE.CircleGeometry(1.2, 24);
+        this.projShadow = new THREE.Mesh(shadowGeo, shadowMat);
+        this.projShadow.rotation.x = -Math.PI / 2;
+        this.projShadow.position.y = 0.05;
+        this.scene.add(this.projShadow);
+
+        // Free-fall ball (dark)
+        const fallGeo = new THREE.SphereGeometry(1.2, 24, 18);
+        const fallMat = new THREE.MeshStandardMaterial({
+            color: 0x222222, roughness: 0.5, metalness: 0.4
+        });
+        this.fallBall = new THREE.Mesh(fallGeo, fallMat);
+        this.fallBall.castShadow = true;
+        this.scene.add(this.fallBall);
+
+        const fallShadow = new THREE.Mesh(shadowGeo.clone(), shadowMat.clone());
+        fallShadow.rotation.x = -Math.PI / 2;
+        fallShadow.position.y = 0.05;
+        this.fallShadow = fallShadow;
+        this.scene.add(fallShadow);
+    }
+
+    buildTrails() {
+        // Projectile trail — full curve, uses Line. Updated each frame from physics.history.
+        const projTrailMat = new THREE.LineBasicMaterial({ color: 0x0066cc, linewidth: 2 });
+        const projTrailGeo = new THREE.BufferGeometry();
+        projTrailGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(3 * 1200), 3));
+        projTrailGeo.setDrawRange(0, 0);
+        this.projTrail = new THREE.Line(projTrailGeo, projTrailMat);
+        this.scene.add(this.projTrail);
+
+        // Free-fall vertical trail (dotted)
+        const fallTrailMat = new THREE.LineDashedMaterial({
+            color: 0x555555, dashSize: 0.6, gapSize: 0.5
+        });
+        const fallTrailGeo = new THREE.BufferGeometry();
+        fallTrailGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(3 * 1200), 3));
+        fallTrailGeo.setDrawRange(0, 0);
+        this.fallTrail = new THREE.Line(fallTrailGeo, fallTrailMat);
+        this.fallTrail.computeLineDistances();
+        this.scene.add(this.fallTrail);
+    }
+
+    buildArrows() {
+        // ArrowHelpers for Vx (green), Vy (grey), |V| (magenta), Vy_fall (orange)
+        const ZERO = new THREE.Vector3(0, 0, 0);
+        const UP   = new THREE.Vector3(0, 1, 0);
+        this.arrVx    = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), ZERO, 1, 0x00aa66, 1.4, 0.7);
+        this.arrVy    = new THREE.ArrowHelper(new THREE.Vector3(0, -1, 0), ZERO, 1, 0x555555, 1.4, 0.7);
+        this.arrVres  = new THREE.ArrowHelper(new THREE.Vector3(1, -1, 0).normalize(), ZERO, 1, 0xd63aaa, 1.6, 0.8);
+        this.arrVfall = new THREE.ArrowHelper(new THREE.Vector3(0, -1, 0), ZERO, 1, 0xcc7700, 1.4, 0.7);
+        // Make arrow lines thicker by tweaking material linewidth (limited but helps on some GPUs)
+        [this.arrVx, this.arrVy, this.arrVres, this.arrVfall].forEach(a => {
+            a.line.material.linewidth = 3;
+            this.scene.add(a);
+        });
+    }
+
+    buildSyncLine() {
+        // Dotted line connecting projectile and free-fall ball (same height, different x)
+        const mat = new THREE.LineDashedMaterial({ color: 0xff2e63, dashSize: 0.8, gapSize: 0.6, opacity: 0.7, transparent: true });
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+        this.syncLine = new THREE.Line(geo, mat);
+        this.scene.add(this.syncLine);
+    }
+
+    buildAxes() {
+        // Subtle axis indicators on the ground for orientation.
+        const xAxis = new THREE.Mesh(
+            new THREE.BoxGeometry(400, 0.15, 0.6),
+            new THREE.MeshBasicMaterial({ color: 0x0066cc, transparent: true, opacity: 0.35 })
+        );
+        xAxis.position.set(150, 0.08, 0);
+        this.scene.add(xAxis);
+
+        // X-axis tick marks every 20 m with small posts
+        for (let x = 0; x <= 320; x += 20) {
+            const post = new THREE.Mesh(
+                new THREE.BoxGeometry(0.3, 1.0, 0.3),
+                new THREE.MeshBasicMaterial({ color: 0x0066cc, transparent: true, opacity: 0.5 })
+            );
+            post.position.set(x, 0.5, -0.2);
+            this.scene.add(post);
+        }
+    }
+
+
+
+    /* ---------- Per-frame visual update ---------- */
+    update(dt) {
+        this.time += dt;
+        const ph = this.physics;
+
+        // Drift clouds (independent of physics state)
+        for (const c of this.clouds) {
+            c.position.x += c.userData.drift * dt;
+            if (c.position.x > 500) c.position.x = -200;
+        }
+
+        // Building height (in case slider is moving)
+        this.setBuildingHeight(ph.h);
+
+        // Projectile position
+        this.proj.position.set(ph.x, ph.y, 0);
+        this.projShadow.position.x = ph.x;
+        // Shadow shrinks with height (subtle)
+        const sh = Math.max(0.3, 1 - ph.y / Math.max(20, ph.h * 1.2));
+        this.projShadow.scale.set(sh, sh, sh);
+
+        // Free-fall ball at x=0, with same y as projectile
+        if (this.toggles.freeFall) {
+            this.fallBall.visible = true;
+            this.fallBall.position.set(0, ph.y, 0);
+            this.fallShadow.visible = true;
+            this.fallShadow.position.x = 0;
+            this.fallShadow.scale.set(sh, sh, sh);
+        } else {
+            this.fallBall.visible = false;
+            this.fallShadow.visible = false;
+        }
+
+        // Projectile trail (full path so far)
+        if (this.toggles.trail) {
+            this.projTrail.visible = true;
+            const arr = this.projTrail.geometry.attributes.position.array;
+            const n = Math.min(ph.history.length, arr.length / 3);
+            for (let i = 0; i < n; i++) {
+                arr[i*3]   = ph.history[i].x;
+                arr[i*3+1] = ph.history[i].y;
+                arr[i*3+2] = 0;
+            }
+            // also include current position as last vertex
+            if (n < arr.length / 3) {
+                arr[n*3]   = ph.x;
+                arr[n*3+1] = ph.y;
+                arr[n*3+2] = 0;
+                this.projTrail.geometry.setDrawRange(0, n + 1);
+            } else {
+                this.projTrail.geometry.setDrawRange(0, n);
+            }
+            this.projTrail.geometry.attributes.position.needsUpdate = true;
+        } else {
+            this.projTrail.visible = false;
+        }
+
+        // Free-fall vertical trail
+        if (this.toggles.freeFall && this.toggles.trail) {
+            this.fallTrail.visible = true;
+            const arr = this.fallTrail.geometry.attributes.position.array;
+            const n = Math.min(ph.fallHistory.length, arr.length / 3);
+            for (let i = 0; i < n; i++) {
+                arr[i*3]   = 0;
+                arr[i*3+1] = ph.fallHistory[i].y;
+                arr[i*3+2] = 0;
+            }
+            this.fallTrail.geometry.setDrawRange(0, n);
+            this.fallTrail.geometry.attributes.position.needsUpdate = true;
+            this.fallTrail.computeLineDistances();
+        } else {
+            this.fallTrail.visible = false;
+        }
+
+        // Sync line (red dashed, between projectile and free-fall ball at same height)
+        if (this.toggles.freeFall && ph.t > 0) {
+            this.syncLine.visible = true;
+            const sa = this.syncLine.geometry.attributes.position.array;
+            sa[0] = 0;     sa[1] = ph.y; sa[2] = 0;
+            sa[3] = ph.x;  sa[4] = ph.y; sa[5] = 0;
+            this.syncLine.geometry.attributes.position.needsUpdate = true;
+            this.syncLine.computeLineDistances();
+        } else {
+            this.syncLine.visible = false;
+        }
+
+        // Vector arrows
+        const showVecs = this.toggles.vectors && (ph.t > 0);
+        // Visual scaling: 1 m/s ~ 0.6 world units along trajectory directions
+        const VS = 0.6;
+        const minLen = 0.4;
+        const setArrow = (arr, dirVec, len, origin, color) => {
+            if (len < minLen) { arr.visible = false; return; }
+            arr.visible = true;
+            arr.position.copy(origin);
+            const d = dirVec.clone().normalize();
+            arr.setDirection(d);
+            arr.setLength(len, Math.min(1.6, len * 0.18), Math.min(0.8, len * 0.10));
+            arr.setColor(new THREE.Color(color));
+        };
+        if (showVecs) {
+            const origin = new THREE.Vector3(ph.x, ph.y, 0);
+            setArrow(this.arrVx,
+                     new THREE.Vector3(1, 0, 0),
+                     Math.abs(ph.vx) * VS,
+                     origin, 0x00aa66);
+            setArrow(this.arrVy,
+                     new THREE.Vector3(0, -1, 0),
+                     Math.abs(ph.vy) * VS,
+                     origin, 0x555555);
+            setArrow(this.arrVres,
+                     new THREE.Vector3(ph.vx, ph.vy, 0),
+                     ph.vMag * VS,
+                     origin, 0xd63aaa);
+            if (this.toggles.freeFall) {
+                setArrow(this.arrVfall,
+                         new THREE.Vector3(0, -1, 0),
+                         Math.abs(ph.vy) * VS,
+                         new THREE.Vector3(0, ph.y, 0), 0xcc7700);
+            } else { this.arrVfall.visible = false; }
+        } else {
+            [this.arrVx, this.arrVy, this.arrVres, this.arrVfall].forEach(a => a.visible = false);
+        }
+
+        // Auto-frame the camera so we always see the full trajectory
+        if (this.cameraAuto) {
+            const xMax = Math.max(20, ph.v0 * Math.sqrt(2 * ph.h / G));
+            const yMax = Math.max(15, ph.h);
+            const tx = xMax * 0.5;
+            const ty = yMax * 0.55;
+            const dist = Math.max(120, xMax * 0.8 + 60);
+            this.controls.target.lerp(new THREE.Vector3(tx, ty, 0), 0.04);
+            const desired = new THREE.Vector3(tx + xMax * 0.18, ty + yMax * 0.6, dist);
+            this.camera.position.lerp(desired, 0.025);
+        }
+        this.controls.update();
+
+        this.renderer.render(this.scene, this.camera);
+    }
+
+    /* ---------- 3D → 2D screen projection (for HTML overlay vec labels) ---------- */
+    project(v3) {
+        const v = v3.clone().project(this.camera);
+        const r = this.renderer.domElement.getBoundingClientRect();
+        return {
+            x: (v.x *  0.5 + 0.5) * r.width  + r.left,
+            y: (v.y * -0.5 + 0.5) * r.height + r.top,
+            inView: v.z > -1 && v.z < 1
+        };
+    }
+
+    resize() {
+        const c = this.renderer.domElement.parentElement;
+        const w = c.clientWidth, h = c.clientHeight;
+        this.camera.aspect = w / h;
+        this.camera.updateProjectionMatrix();
+        this.renderer.setSize(w, h, false);
+    }
+
+    resetCameraAuto() { this.cameraAuto = true; }
+}
+
+
+
+/* =====================================================================
+   App — UI bindings + main loop, mirrors Python control semantics.
+     - Start = run from current state (or restart if landed)
+     - Stop  = freeze where you are
+     - Reset = back to t=0
+     - Pause = freeze loop until resumed
+     - Step  = advance one fixed dt (also auto-pauses if running)
+     - Free-fall toggle hides the comparison ball / panel
+     - Spacebar pauses / resumes
+   ===================================================================== */
+class App {
+    constructor() {
+        this.physics = new PhysicsEngine();
+        const container = document.getElementById('canvas-container');
+        this.renderer = new Renderer3D(container, this.physics);
+
+        this.state = { running: false, paused: false, speed: 1.0 };
+        this.lastT = 0;
+
+        this.initUI();
+        this.bindEvents();
+        this.applySliders();
+        // First paint
+        this.renderer.update(0);
+        this.refreshDataPanels(true);
+        requestAnimationFrame((t) => this.loop(t));
+    }
+
+    initUI() {
+        this.els = {
+            start: document.getElementById('startBtn'),
+            pause: document.getElementById('pauseBtn'),
+            step:  document.getElementById('stepBtn'),
+            stop:  document.getElementById('stopBtn'),
+            reset: document.getElementById('resetBtn'),
+            tFreeFall: document.getElementById('togFreeFall'),
+            tVectors:  document.getElementById('togVectors'),
+            tTrail:    document.getElementById('togTrail'),
+            sVel:  document.getElementById('velSlider'),
+            sHgt:  document.getElementById('hgtSlider'),
+            sSpd:  document.getElementById('spdSlider'),
+            dispVel: document.getElementById('velDisp'),
+            dispHgt: document.getElementById('hgtDisp'),
+            dispSpd: document.getElementById('spdDisp'),
+            status:  document.getElementById('flight-status'),
+            // data panels
+            pTime: document.getElementById('pTime'),
+            pVMag: document.getElementById('pVMag'),
+            pVx:   document.getElementById('pVx'),
+            pVy:   document.getElementById('pVy'),
+            pX:    document.getElementById('pX'),
+            pY:    document.getElementById('pY'),
+            fH:    document.getElementById('fH'),
+            fTime: document.getElementById('fTime'),
+            fVy:   document.getElementById('fVy'),
+            fY:    document.getElementById('fY'),
+            fallPanel: document.getElementById('fallPanel'),
+            // vec labels (HTML overlays)
+            lblVx:    document.getElementById('lblVx'),
+            lblVy:    document.getElementById('lblVy'),
+            lblVres:  document.getElementById('lblVres'),
+            lblVfall: document.getElementById('lblVfall')
+        };
+    }
+
+    applySliders() {
+        const v0 = parseFloat(this.els.sVel.value);
+        const h  = parseFloat(this.els.sHgt.value);
+        this.state.speed = parseFloat(this.els.sSpd.value);
+        this.physics.setParams(v0, h);
+        this.els.dispVel.textContent = v0.toFixed(1);
+        this.els.dispHgt.textContent = h.toFixed(1);
+        this.els.dispSpd.textContent = this.state.speed.toFixed(1) + 'x';
+    }
+
+    bindEvents() {
+        // Sliders
+        this.els.sVel.addEventListener('input', () => {
+            // Changing velocity mid-flight while paused is fine; if running, snap-reset
+            if (this.state.running && !this.state.paused) this.actionStop();
+            this.applySliders();
+        });
+        this.els.sHgt.addEventListener('input', () => {
+            if (this.state.running) this.actionStop();
+            this.applySliders();
+            this.physics.reset();
+        });
+        this.els.sSpd.addEventListener('input', () => this.applySliders());
+
+        // Buttons
+        this.els.start.onclick = () => this.actionStart();
+        this.els.stop.onclick  = () => this.actionStop();
+        this.els.pause.onclick = () => this.togglePause();
+        this.els.step.onclick  = () => this.actionStep();
+        this.els.reset.onclick = () => this.actionReset();
+
+        // Toggles
+        this.els.tFreeFall.onclick = () => {
+            this.renderer.toggles.freeFall = !this.renderer.toggles.freeFall;
+            this.els.tFreeFall.classList.toggle('active', this.renderer.toggles.freeFall);
+            this.els.tFreeFall.textContent = `Free Fall: ${this.renderer.toggles.freeFall ? 'ON' : 'OFF'}`;
+            this.els.fallPanel.classList.toggle('hidden', !this.renderer.toggles.freeFall);
+        };
+        this.els.tVectors.onclick = () => {
+            this.renderer.toggles.vectors = !this.renderer.toggles.vectors;
+            this.els.tVectors.classList.toggle('active', this.renderer.toggles.vectors);
+        };
+        this.els.tTrail.onclick = () => {
+            this.renderer.toggles.trail = !this.renderer.toggles.trail;
+            this.els.tTrail.classList.toggle('active', this.renderer.toggles.trail);
+        };
+
+        // Keyboard: Space = pause/play
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' || e.key === ' ') {
+                e.preventDefault();
+                this.togglePause();
+            }
+        });
+
+        // Tab visibility — pause sim if minimized, resume on return
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                this._wasRunning = this.state.running && !this.state.paused;
+                this.state.paused = true;
+            } else {
+                if (this._wasRunning) this.state.paused = false;
+                this.lastT = 0;  // avoid huge dt jump
+            }
+            this.updatePauseButton();
+        });
+
+        // Resize
+        window.addEventListener('resize', () => this.renderer.resize());
+    }
+
+
+
+    /* ---------- Action handlers ---------- */
+    actionStart() {
+        if (this.physics.landed()) this.physics.reset();
+        this.state.running = true;
+        this.state.paused = false;
+        this.els.start.classList.add('playing');
+        this.updatePauseButton();
+    }
+    actionStop() {
+        this.state.running = false;
+        this.state.paused  = false;
+        this.els.start.classList.remove('playing');
+        this.updatePauseButton();
+    }
+    actionReset() {
+        this.actionStop();
+        this.physics.reset();
+        this.renderer.resetCameraAuto();
+        this.refreshDataPanels(true);
+    }
+    togglePause() {
+        if (!this.state.running) {
+            // If not running, "Pause" acts as "Start" too — like the Python code's space-key
+            this.actionStart();
+            return;
+        }
+        this.state.paused = !this.state.paused;
+        this.updatePauseButton();
+    }
+    actionStep() {
+        if (!this.state.running) {
+            // start in paused state and advance one step
+            this.state.running = true;
+            this.state.paused  = true;
+            this.els.start.classList.add('playing');
+        } else {
+            // ensure paused
+            this.state.paused = true;
+        }
+        // Advance one fixed simulation step (~60Hz frame)
+        this.physics.step(1/60 * this.state.speed);
+        this.updatePauseButton();
+    }
+
+    updatePauseButton() {
+        const isPausing = this.state.running && this.state.paused;
+        this.els.pause.classList.toggle('paused', isPausing);
+        this.els.pause.textContent = isPausing ? '▶ Resume' : '❚❚ Pause';
+    }
+
+    /* ---------- Status banner ---------- */
+    refreshStatus() {
+        const ph = this.physics;
+        const node = this.els.status;
+        node.classList.remove('landed');
+        if (ph.landed()) {
+            node.textContent = `Landed — Range ${ph.x.toFixed(1)} m  /  Flight ${ph.tMax.toFixed(2)} s`;
+            node.classList.add('landed');
+            node.classList.add('visible');
+        } else if (this.state.running) {
+            const pausedLbl = this.state.paused ? ' (Paused)' : '';
+            node.textContent = `In Flight  t=${ph.t.toFixed(2)}s  v0=${ph.v0.toFixed(0)} m/s  h=${ph.h.toFixed(0)} m${pausedLbl}`;
+            node.classList.add('visible');
+        } else {
+            node.textContent = `Ready  v0=${ph.v0.toFixed(0)} m/s  h=${ph.h.toFixed(0)} m`;
+            node.classList.add('visible');
+        }
+    }
+
+    /* ---------- Data panels (top-right boxes) ---------- */
+    refreshDataPanels() {
+        const ph = this.physics;
+        this.els.pTime.textContent = ph.t.toFixed(2) + ' s';
+        this.els.pVMag.textContent = ph.vMag.toFixed(2) + ' m/s';
+        this.els.pVx.textContent   = ph.vx.toFixed(2) + ' m/s';
+        this.els.pVy.textContent   = Math.abs(ph.vy).toFixed(2) + ' m/s';
+        this.els.pX.textContent    = ph.x.toFixed(1) + ' m';
+        this.els.pY.textContent    = ph.y.toFixed(1) + ' m';
+        this.els.fH.textContent    = ph.h.toFixed(1) + ' m';
+        this.els.fTime.textContent = ph.t.toFixed(2) + ' s';
+        this.els.fVy.textContent   = Math.abs(ph.vy).toFixed(2) + ' m/s';
+        this.els.fY.textContent    = ph.y.toFixed(1) + ' m';
+    }
+
+    /* ---------- Vector arrow text labels (HTML overlays) ---------- */
+    refreshVecLabels() {
+        const ph = this.physics;
+        const showVecs = this.renderer.toggles.vectors && ph.t > 0;
+        const VS = 0.6;
+        const place = (lbl, vec3, txt, on) => {
+            if (!on) { lbl.classList.remove('visible'); return; }
+            const p = this.renderer.project(vec3);
+            if (!p.inView) { lbl.classList.remove('visible'); return; }
+            lbl.style.left = p.x + 'px';
+            lbl.style.top  = p.y + 'px';
+            lbl.textContent = txt;
+            lbl.classList.add('visible');
+        };
+        // Position labels at the *tip* of each arrow
+        const projP = new THREE.Vector3(ph.x, ph.y, 0);
+        place(this.els.lblVx,
+              new THREE.Vector3(ph.x + ph.vx * VS, ph.y + 1.5, 0),
+              `${ph.vx.toFixed(1)} m/s`, showVecs);
+        place(this.els.lblVy,
+              new THREE.Vector3(ph.x - 2.5, ph.y + ph.vy * VS, 0),
+              `${Math.abs(ph.vy).toFixed(1)} m/s`, showVecs);
+        place(this.els.lblVres,
+              new THREE.Vector3(ph.x + ph.vx * VS * 0.5, ph.y + ph.vy * VS * 0.5 - 2, 0),
+              `${ph.vMag.toFixed(1)} m/s`, showVecs);
+        place(this.els.lblVfall,
+              new THREE.Vector3(2.5, ph.y + ph.vy * VS, 0),
+              `${Math.abs(ph.vy).toFixed(1)} m/s`,
+              showVecs && this.renderer.toggles.freeFall);
+    }
+
+    loop(t) {
+        if (!this.lastT) this.lastT = t;
+        const dtMs = t - this.lastT;
+        this.lastT = t;
+
+        if (this.state.running && !this.state.paused) {
+            const dt = Math.min(dtMs / 1000, 0.05) * this.state.speed;
+            this.physics.step(dt);
+            if (this.physics.landed()) this.actionStop();  // freeze on landing
+        }
+        this.renderer.update(dtMs / 1000);
+        this.refreshDataPanels();
+        this.refreshVecLabels();
+        this.refreshStatus();
+        requestAnimationFrame((t) => this.loop(t));
+    }
+}
+
+/* ---------- Bootstrap ---------- */
+document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => {
+        const loader = document.getElementById('loader');
+        if (loader) {
+            loader.style.opacity = '0';
+            setTimeout(() => loader.remove(), 600);
+        }
+    }, 800);
+
+    const app = new App();
+
+    function resizeAppWrapper() {
+        const ww = window.innerWidth, wh = window.innerHeight;
+        const baseW = 1400, baseH = 800;
+        const scale = Math.min(ww / baseW, wh / baseH);
+        const wrap = document.getElementById('app-wrapper');
+        if (wrap) {
+            wrap.style.width  = (ww / scale) + 'px';
+            wrap.style.height = (wh / scale) + 'px';
+            wrap.style.transform = `scale(${scale})`;
+        }
+        app.renderer.resize();
+    }
+    window.addEventListener('resize', resizeAppWrapper);
+    resizeAppWrapper();
+});
+</script>
+</body>
+</html>
