@@ -1,0 +1,1364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>P-N Junction Diode: Shockley Equation Lab</title>
+    <link rel="icon" type="image/png" href="webicon.png">
+    <style>
+        :root {
+            --bg: #FFFFE0;
+            --panel-bg: rgba(255,255,230,0.92);
+            --blue: #0066cc;
+            --blue-glow: rgba(0,102,204,0.35);
+            --green: #00aa66;
+            --red: #ff2e63;
+            --p-color: #d44a64;
+            --n-color: #4a7ad4;
+            --text: #1a1a2e;
+            --border: rgba(0,0,0,0.13);
+            --muted: rgba(0,102,204,0.18);
+        }
+        * { box-sizing: border-box; user-select: none; -webkit-font-smoothing: antialiased; margin: 0; padding: 0; }
+        body {
+            font-family: 'Arial', sans-serif; background: var(--bg); color: var(--text);
+            margin: 0; height: 100vh; overflow: hidden;
+        }
+        #app-wrapper {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            transform-origin: 0 0; overflow: hidden;
+            display: flex; flex-direction: column; background-color: var(--bg);
+        }
+        header { position: absolute; top: 20px; left: 30px; z-index: 10; pointer-events: none; }
+        h1 {
+            margin: 0; font-size: 2.4rem; font-weight: 700; letter-spacing: 3px;
+            text-transform: uppercase; color: var(--blue);
+            text-shadow: 0 0 18px rgba(0,102,204,0.25);
+        }
+        h1 span { color: #888; font-weight: 400; font-size: 1rem; display: block; letter-spacing: 4px; margin-top: -4px; }
+        .viewport { flex: 1; position: relative; width: 100%; height: 100%; }
+        canvas { display: block; width: 100%; height: 100%; cursor: pointer; }
+        .controls-container {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            width: 95%; max-width: 1300px;
+            background: var(--panel-bg); backdrop-filter: blur(14px);
+            border: 1px solid var(--border); border-radius: 12px; padding: 15px 20px;
+            display: flex; flex-wrap: wrap; gap: 15px; align-items: center; justify-content: center;
+            z-index: 20; box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+        }
+
+        .btn {
+            padding: 8px 14px; background: transparent; border: 1.5px solid var(--blue);
+            color: var(--blue); border-radius: 6px; font-weight: 600; font-size: 0.8rem;
+            letter-spacing: 0.5px; text-transform: uppercase; cursor: pointer; transition: all 0.2s;
+            display: flex; align-items: center; justify-content: center; gap: 4px;
+        }
+        .btn:hover { box-shadow: 0 0 8px var(--blue-glow); background: var(--muted); }
+        .btn.active { background: var(--blue); color: #fff; box-shadow: 0 0 12px var(--blue-glow); }
+        .btn.active-green { border-color: var(--green); color: var(--green); }
+        .btn.active-green.playing { background: var(--green); color: #fff; box-shadow: 0 0 15px rgba(0,170,102,0.4); }
+        .btn.active-red { border-color: var(--red); color: var(--red); }
+        .btn.active-red:hover { background: rgba(255,46,99,0.1); box-shadow: 0 0 12px rgba(255,46,99,0.3); }
+        .btn.bias-fwd.active { background: var(--green); color: #fff; border-color: var(--green); box-shadow: 0 0 12px rgba(0,170,102,0.4); }
+        .btn.bias-rev.active { background: var(--red); color: #fff; border-color: var(--red); box-shadow: 0 0 12px rgba(255,46,99,0.4); }
+        .btn.metal { font-size: 0.72rem; padding: 6px 10px; }
+        .slider-group { width: 145px; display: flex; flex-direction: column; gap: 4px; }
+        .slider-header { display: flex; justify-content: space-between; font-size: 0.72rem; letter-spacing: 0.3px; color: var(--blue); font-weight: bold; }
+        .slider-val { font-weight: 700; color: #333; font-size: 0.72rem; }
+        .divider { width: 1px; height: 35px; background: var(--border); }
+        .mode-group { display: flex; gap: 8px; align-items: center; }
+        input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%;
+            background: var(--blue); cursor: pointer; margin-top: -6px;
+            box-shadow: 0 0 8px var(--blue-glow); border: 2px solid #fff; transition: transform 0.1s;
+        }
+        input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.15); }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 4px; background: rgba(0,0,0,0.15); border-radius: 2px;
+        }
+        #bias-status {
+            position: absolute; top: 95px; left: 50%; transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.95); padding: 8px 25px; border-radius: 10px;
+            border: 2px solid var(--green); color: var(--green); font-weight: bold;
+            text-transform: uppercase; letter-spacing: 1.5px; opacity: 0; transition: all 0.3s;
+            pointer-events: none; box-shadow: 0 0 30px rgba(0,170,102,0.3); font-size: 0.85rem;
+            z-index: 15;
+        }
+        #bias-status.visible { opacity: 1; }
+        #bias-status.reverse { border-color: var(--red); color: var(--red); box-shadow: 0 0 30px rgba(255,46,99,0.3); }
+        #bias-status.breakdown { border-color: #ffaa00; color: #b87800; box-shadow: 0 0 30px rgba(255,170,0,0.3); }
+        #loader {
+            position: fixed; inset: 0; background: var(--bg); z-index: 200;
+            display: flex; align-items: center; justify-content: center;
+            flex-direction: column; gap: 18px; transition: opacity 0.6s;
+        }
+        #loader h2 { font-family: 'Arial', sans-serif; font-size: 1.8rem; color: var(--blue); letter-spacing: 4px; }
+        .loader-bar { width: 280px; height: 3px; background: #ddd; border-radius: 2px; overflow: hidden; }
+        .loader-fill { height: 100%; background: var(--blue); animation: loadFill 0.8s ease-out forwards; }
+        @keyframes loadFill { from { width: 0 } to { width: 100% } }
+        .label-row { display: flex; gap: 4px; align-items: center; }
+        .label-row .label { font-size: 0.72rem; font-weight: bold; color: var(--blue); margin-right: 4px; letter-spacing: 0.3px; }
+    </style>
+</head>
+
+<body>
+    <div id="app-wrapper">
+        <div id="loader">
+            <h2>INITIALIZING UNISON...</h2>
+            <div class="loader-bar"><div class="loader-fill"></div></div>
+        </div>
+        <header>
+            <h1>P-N Junction Diode <span>Shockley Equation Lab</span></h1>
+        </header>
+        <div class="viewport">
+            <canvas id="simCanvas"></canvas>
+            <div id="bias-status">FORWARD BIAS — Conducting</div>
+            <div class="controls-container">
+                <div class="mode-group">
+                    <button id="playBtn" class="btn active-green playing">❚❚ Pause</button>
+                    <button id="resetBtn" class="btn active-red">↺ Reset</button>
+                </div>
+                <div class="divider"></div>
+                <div class="label-row">
+                    <span class="label">BIAS:</span>
+                    <button id="biasFwd" class="btn bias-fwd active">▶ Forward</button>
+                    <button id="biasRev" class="btn bias-rev">◀ Reverse</button>
+                </div>
+                <div class="divider"></div>
+                <div class="label-row">
+                    <span class="label">MAT:</span>
+                    <button class="btn metal active" data-mat="Si">Si</button>
+                    <button class="btn metal" data-mat="Ge">Ge</button>
+                </div>
+                <div class="divider"></div>
+                <div class="mode-group">
+                    <button id="togCarriers" class="btn active">Carriers</button>
+                    <button id="togLabels" class="btn active">Labels</button>
+                    <button id="togGraph" class="btn active">Graph</button>
+                    <button id="togVectors" class="btn active">Field</button>
+                </div>
+                <div class="divider"></div>
+                <div class="slider-group">
+                    <div class="slider-header"><span>Voltage (V)</span><span id="voltDisp" class="slider-val">1.00</span></div>
+                    <input type="range" id="voltSlider" min="0" max="60" step="0.05" value="1.0">
+                </div>
+                <div class="slider-group">
+                    <div class="slider-header"><span>Load R (Ω)</span><span id="rDisp" class="slider-val">100</span></div>
+                    <input type="range" id="rSlider" min="10" max="1000" step="10" value="100">
+                </div>
+                <div class="slider-group">
+                    <div class="slider-header"><span>Temp (K)</span><span id="tDisp" class="slider-val">300</span></div>
+                    <input type="range" id="tSlider" min="200" max="400" step="5" value="300">
+                </div>
+                <div class="slider-group">
+                    <div class="slider-header"><span>Sim Speed</span><span id="speedDisp" class="slider-val">1.0x</span></div>
+                    <input type="range" id="speedSlider" min="0.1" max="2.0" step="0.1" value="1.0">
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+/* =========================================================================
+   P-N JUNCTION DIODE — Shockley Equation Lab
+   - Solves V_supply = V_d + I*R with Newton's method
+   - Shockley:  I = Is * (exp(V_d / (n * Vt)) - 1)   [+ avalanche term beyond V_br]
+   - Depletion width  ∝ sqrt(V_bi - V_d)  (narrow forward, wide reverse)
+   - NEB Grade 12 labels: Depletion Layer, Barrier Potential, Majority Carriers
+   ========================================================================= */
+
+const PHYS = { k_B: 1.380649e-23, q: 1.602e-19 };
+
+const MATERIALS = {
+    Si: {
+        name: 'Silicon',
+        Is:   1e-12,        // saturation current (A)
+        n:    1.5,          // ideality factor
+        Vbi:  0.70,         // built-in / barrier potential (V)
+        Vbr:  50.0,         // breakdown voltage (V) — visualised
+        knee: 0.70,
+        bandGap: 1.12,
+        p_color: { r: 220, g: 80,  b: 100 },
+        n_color: { r: 80,  g: 130, b: 220 }
+    },
+    Ge: {
+        name: 'Germanium',
+        Is:   1e-6,
+        n:    1.0,
+        Vbi:  0.30,
+        Vbr:  30.0,
+        knee: 0.30,
+        bandGap: 0.66,
+        p_color: { r: 230, g: 130, b: 100 },
+        n_color: { r: 110, g: 160, b: 220 }
+    }
+};
+
+function hexShade(c, pct) {
+    const f = pct < 0 ? 0 : 255;
+    const t = pct < 0 ? -pct : pct;
+    return `rgb(${Math.round((f - c.r) * t + c.r)},${Math.round((f - c.g) * t + c.g)},${Math.round((f - c.b) * t + c.b)})`;
+}
+function rgba(c, a) { return `rgba(${c.r},${c.g},${c.b},${a})`; }
+
+
+class PhysicsEngine {
+    constructor() {
+        this.material = 'Si';
+        this.biasMode = 'forward';      // 'forward' | 'reverse'
+        this.V_supply = 1.0;            // magnitude (V)
+        this.T = 300;                   // K
+        this.R_load = 100;              // Ω
+        this.simSpeed = 1.0;
+
+        this.V_d = 0;                   // voltage across diode
+        this.I = 0;                     // current through diode (A)
+        this.t = 0;
+        this.holes = [];
+        this.electrons = [];
+        this.minorityElectrons = [];    // few electrons in P-region
+        this.minorityHoles = [];        // few holes in N-region
+        this.wireDots = [];             // animated dots in wires
+        this.recombineFlashes = [];
+    }
+
+    get mat() { return MATERIALS[this.material]; }
+    get Vt()  { return PHYS.k_B * this.T / PHYS.q; }
+    get V_applied() { return (this.biasMode === 'forward' ? +1 : -1) * this.V_supply; }
+    get isBreakdown() {
+        return this.biasMode === 'reverse' && this.V_d <= -this.mat.Vbr * 0.95;
+    }
+
+    // Shockley current with breakdown
+    diodeI(Vd) {
+        const m = this.mat;
+        const arg = Math.min(Vd / (m.n * this.Vt), 80);   // prevent overflow
+        const ideal = m.Is * (Math.exp(arg) - 1);
+        let br = 0;
+        if (Vd < -m.Vbr * 0.85) {
+            const x = (-Vd - m.Vbr * 0.85) / (m.Vbr * 0.15);
+            br = -1e-2 * Math.pow(Math.max(0, x), 3);
+        }
+        return ideal + br;
+    }
+
+    diodeDI(Vd) {
+        const eps = 1e-5;
+        return (this.diodeI(Vd + eps) - this.diodeI(Vd - eps)) / (2 * eps);
+    }
+
+    // Solve V_app = V_d + R*I  with Newton + bisection fallback
+    solve() {
+        const m = this.mat;
+        const V_app = this.V_applied;
+        const R = Math.max(1e-3, this.R_load);
+
+        // Initial guess
+        let V_d;
+        if (V_app > 0)      V_d = Math.min(m.knee, V_app * 0.9);
+        else if (V_app < -m.Vbr * 0.85) V_d = -m.Vbr * 0.95;
+        else                V_d = V_app;
+
+        for (let i = 0; i < 60; i++) {
+            const I  = this.diodeI(V_d);
+            const dI = this.diodeDI(V_d);
+            const f  = V_app - V_d - R * I;
+            const df = -1 - R * dI;
+            let dV = f / df;
+            // damping
+            if (Math.abs(dV) > 0.5) dV = 0.5 * Math.sign(dV);
+            V_d -= dV;
+            // hard clamps
+            if (V_d > m.knee + 0.20) V_d = m.knee + 0.20;
+            if (V_d < -m.Vbr * 1.10) V_d = -m.Vbr * 1.10;
+            if (Math.abs(dV) < 1e-9) break;
+        }
+        this.V_d = V_d;
+        this.I = this.diodeI(V_d);
+    }
+
+    // Visual depletion factor: 1 = neutral, <1 = forward narrowing, >1 = reverse widening
+    depletionFactor() {
+        const m = this.mat;
+        const arg = Math.max(0.02, (m.Vbi - this.V_d) / m.Vbi);
+        return Math.sqrt(arg);
+    }
+
+
+    initCarriers(g) {
+        this.holes = [];
+        this.electrons = [];
+        this.minorityElectrons = [];
+        this.minorityHoles = [];
+        const N = 55;
+        for (let i = 0; i < N; i++) {
+            this.holes.push(this._spawnIn(g.pX0 + 6, g.depLeftBase - 6, g.junY0 + 6, g.junY1 - 6));
+            this.electrons.push(this._spawnIn(g.depRightBase + 6, g.nX1 - 6, g.junY0 + 6, g.junY1 - 6));
+        }
+        // A few minority carriers for educational completeness
+        for (let i = 0; i < 4; i++) {
+            this.minorityElectrons.push(this._spawnIn(g.pX0 + 8, g.depLeftBase - 10, g.junY0 + 8, g.junY1 - 8));
+            this.minorityHoles.push(this._spawnIn(g.depRightBase + 10, g.nX1 - 8, g.junY0 + 8, g.junY1 - 8));
+        }
+    }
+
+    _spawnIn(x0, x1, y0, y1) {
+        return {
+            x: x0 + Math.random() * (x1 - x0),
+            y: y0 + Math.random() * (y1 - y0),
+            vx: (Math.random() - 0.5) * 30,
+            vy: (Math.random() - 0.5) * 30
+        };
+    }
+
+    // Current-driven drift coefficient on screen (px/sec)
+    driftCoef() {
+        const I_norm = Math.tanh(this.I * 50);   // -1..1 sigmoidal
+        return I_norm;                           // sign indicates direction
+    }
+
+    updateCarriers(dt, g) {
+        const drift = this.driftCoef();          // forward bias above knee → positive
+        const fwdConducting = this.biasMode === 'forward' && this.V_d > this.mat.knee * 0.85;
+        const depW = this.depletionFactor();
+        const halfDepBase = (g.depRightBase - g.depLeftBase) / 2;
+        const halfDep = halfDepBase * depW;
+        const junX = (g.depLeftBase + g.depRightBase) / 2;
+        const depLeft = junX - halfDep;
+        const depRight = junX + halfDep;
+        const driftPx = drift * 90;              // tune
+
+        // Holes in P-region
+        for (const h of this.holes) {
+            h.vx += (Math.random() - 0.5) * 220 * dt + driftPx * dt * 1.4;
+            h.vy += (Math.random() - 0.5) * 220 * dt;
+            h.vx *= 0.90; h.vy *= 0.90;
+            h.x += h.vx * dt; h.y += h.vy * dt;
+            // Bounds
+            if (h.x < g.pX0 + 4) { h.x = g.pX0 + 4; h.vx = Math.abs(h.vx); }
+            if (h.y < g.junY0 + 4) { h.y = g.junY0 + 4; h.vy = Math.abs(h.vy); }
+            if (h.y > g.junY1 - 4) { h.y = g.junY1 - 4; h.vy = -Math.abs(h.vy); }
+            // Junction barrier — only allow passage when conducting
+            if (!fwdConducting && h.x > depLeft - 2) {
+                h.x = depLeft - 2; h.vx = -Math.abs(h.vx) - 5;
+            }
+            // Successful crossing
+            if (h.x > junX + halfDep * 0.7) {
+                this.recombineFlashes.push({ x: h.x, y: h.y, life: 1.0 });
+                h.x = g.pX0 + 6 + Math.random() * 30;
+                h.y = g.junY0 + 6 + Math.random() * (g.junY1 - g.junY0 - 12);
+                h.vx = 0; h.vy = 0;
+            }
+        }
+
+        // Electrons in N-region
+        for (const e of this.electrons) {
+            e.vx += (Math.random() - 0.5) * 220 * dt - driftPx * dt * 1.4;
+            e.vy += (Math.random() - 0.5) * 220 * dt;
+            e.vx *= 0.90; e.vy *= 0.90;
+            e.x += e.vx * dt; e.y += e.vy * dt;
+            if (e.x > g.nX1 - 4) { e.x = g.nX1 - 4; e.vx = -Math.abs(e.vx); }
+            if (e.y < g.junY0 + 4) { e.y = g.junY0 + 4; e.vy = Math.abs(e.vy); }
+            if (e.y > g.junY1 - 4) { e.y = g.junY1 - 4; e.vy = -Math.abs(e.vy); }
+            if (!fwdConducting && e.x < depRight + 2) {
+                e.x = depRight + 2; e.vx = Math.abs(e.vx) + 5;
+            }
+            if (e.x < junX - halfDep * 0.7) {
+                this.recombineFlashes.push({ x: e.x, y: e.y, life: 1.0 });
+                e.x = g.nX1 - 6 - Math.random() * 30;
+                e.y = g.junY0 + 6 + Math.random() * (g.junY1 - g.junY0 - 12);
+                e.vx = 0; e.vy = 0;
+            }
+        }
+
+
+        // Minority carriers — slow drift, can leak across in reverse (saturation current)
+        const minDrift = (this.biasMode === 'reverse') ? 25 : 5;
+        for (const me of this.minorityElectrons) {
+            me.vx += (Math.random() - 0.5) * 100 * dt + minDrift * dt;  // drift toward N
+            me.vy += (Math.random() - 0.5) * 100 * dt;
+            me.vx *= 0.92; me.vy *= 0.92;
+            me.x += me.vx * dt; me.y += me.vy * dt;
+            if (me.x < g.pX0 + 4) { me.x = g.pX0 + 4; me.vx = Math.abs(me.vx); }
+            if (me.y < g.junY0 + 4) { me.y = g.junY0 + 4; me.vy = Math.abs(me.vy); }
+            if (me.y > g.junY1 - 4) { me.y = g.junY1 - 4; me.vy = -Math.abs(me.vy); }
+            if (me.x > junX) {
+                me.x = g.pX0 + 6 + Math.random() * 20;
+                me.y = g.junY0 + 6 + Math.random() * (g.junY1 - g.junY0 - 12);
+            }
+        }
+        for (const mh of this.minorityHoles) {
+            mh.vx += (Math.random() - 0.5) * 100 * dt - minDrift * dt;  // drift toward P
+            mh.vy += (Math.random() - 0.5) * 100 * dt;
+            mh.vx *= 0.92; mh.vy *= 0.92;
+            mh.x += mh.vx * dt; mh.y += mh.vy * dt;
+            if (mh.x > g.nX1 - 4) { mh.x = g.nX1 - 4; mh.vx = -Math.abs(mh.vx); }
+            if (mh.y < g.junY0 + 4) { mh.y = g.junY0 + 4; mh.vy = Math.abs(mh.vy); }
+            if (mh.y > g.junY1 - 4) { mh.y = g.junY1 - 4; mh.vy = -Math.abs(mh.vy); }
+            if (mh.x < junX) {
+                mh.x = g.nX1 - 6 - Math.random() * 20;
+                mh.y = g.junY0 + 6 + Math.random() * (g.junY1 - g.junY0 - 12);
+            }
+        }
+
+        // Recombination flashes (fade)
+        for (let i = this.recombineFlashes.length - 1; i >= 0; i--) {
+            this.recombineFlashes[i].life -= 2.5 * dt;
+            if (this.recombineFlashes[i].life <= 0) this.recombineFlashes.splice(i, 1);
+        }
+    }
+
+    updateWireDots(dt, g) {
+        // Animated dots flowing in the circuit wires.
+        // Direction of conventional current:
+        //   forward bias + above knee  →  + → P (top wire) → diode → N → - (bottom wire)
+        //   reverse bias                →  reversed (very slow)
+        const I_abs = Math.abs(this.I);
+        const speedFactor = Math.tanh(I_abs * 80);   // 0..1
+        const speed = 60 + 240 * speedFactor;        // px/sec along path
+        const dir = this.biasMode === 'forward' ? 1 : -1;
+
+        // Spawn rate proportional to current
+        if (Math.random() < speedFactor * 1.2) {
+            this.wireDots.push({ s: 0, color: this.biasMode === 'forward' ? '#0066cc' : '#ff2e63' });
+        }
+        const pathLen = g.wirePathLen || 1;
+        for (let i = this.wireDots.length - 1; i >= 0; i--) {
+            this.wireDots[i].s += speed * dt * dir;
+            if (this.wireDots[i].s > pathLen + 5 || this.wireDots[i].s < -5) {
+                this.wireDots.splice(i, 1);
+            }
+        }
+        // Cap
+        if (this.wireDots.length > 80) this.wireDots.splice(0, this.wireDots.length - 80);
+    }
+
+    update(dt, g) {
+        this.t += dt;
+        this.solve();
+        this.updateCarriers(dt, g);
+        this.updateWireDots(dt, g);
+    }
+
+    reset(g) {
+        this.t = 0;
+        this.recombineFlashes = [];
+        this.wireDots = [];
+        this.initCarriers(g);
+    }
+}
+
+
+/* =====================================================================
+   Renderer — draws junction, carriers, circuit, I-V graph, info panel
+   ===================================================================== */
+class Renderer {
+    constructor(canvasId, physics) {
+        this.canvas = document.getElementById(canvasId);
+        this.ctx = this.canvas.getContext('2d', { alpha: false });
+        this.physics = physics;
+        this.toggles = { carriers: true, labels: true, graph: true, vectors: true };
+        this.time = 0;
+        this.zoomAutoFit();
+    }
+
+    zoomAutoFit() {
+        const dpr = window.devicePixelRatio || 1;
+        const rect = this.canvas.parentElement.getBoundingClientRect();
+        this.canvas.width = rect.width * dpr;
+        this.canvas.height = rect.height * dpr;
+        this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+        this.ctx.scale(dpr, dpr);
+        this.width = rect.width;
+        this.height = rect.height;
+    }
+
+    geometry() {
+        const w = this.width, h = this.height;
+        // Junction in upper-left/centre region
+        const junX0 = w * 0.10;
+        const junX1 = w * 0.58;
+        const junY0 = h * 0.20;
+        const junY1 = h * 0.46;
+        const pX0 = junX0;
+        const pX1 = (junX0 + junX1) / 2 - 25;     // base depletion left
+        const nX0 = (junX0 + junX1) / 2 + 25;     // base depletion right
+        const nX1 = junX1;
+        const depLeftBase  = pX1;
+        const depRightBase = nX0;
+
+        // Circuit lower portion
+        const cTopY = h * 0.55;
+        const cBotY = h * 0.78;
+        const battX = w * 0.30;
+        const resX  = w * 0.46;
+        const ammX  = w * 0.58;
+
+        // Wire path total length (for animated dots)
+        // Path: [bottom-of-P (junX0+8, junY1)] → down to cBotY → right to battX
+        //       → through battery → resX → through R → ammX → up to junY1 (junX1-8)
+        const pAnodeX = junX0 + 8, pAnodeY = junY1;
+        const nCathX  = junX1 - 8, nCathY  = junY1;
+        const segs = [];
+        segs.push({ x0: pAnodeX, y0: pAnodeY, x1: pAnodeX, y1: cBotY });           // down P
+        segs.push({ x0: pAnodeX, y0: cBotY,  x1: battX - 18, y1: cBotY });          // to battery
+        segs.push({ x0: battX + 18, y0: cBotY, x1: resX - 22, y1: cBotY });         // battery to R
+        segs.push({ x0: resX + 22, y0: cBotY,  x1: ammX - 18, y1: cBotY });         // R to A
+        segs.push({ x0: ammX + 18, y0: cBotY,  x1: nCathX,  y1: cBotY });           // A to under N
+        segs.push({ x0: nCathX,  y0: cBotY,    x1: nCathX,  y1: nCathY });          // up to N
+        let total = 0;
+        for (const s of segs) { s.s0 = total; total += Math.hypot(s.x1 - s.x0, s.y1 - s.y0); s.s1 = total; }
+
+        return {
+            junX0, junX1, junY0, junY1,
+            pX0, pX1, nX0, nX1,
+            depLeftBase, depRightBase,
+            cTopY, cBotY, battX, resX, ammX,
+            pAnodeX, pAnodeY, nCathX, nCathY,
+            wireSegs: segs, wirePathLen: total,
+            // Right-side panels
+            graphX: w * 0.66, graphY: h * 0.16, graphW: w * 0.30, graphH: h * 0.34,
+            infoX: w * 0.66, infoY: h * 0.54, infoW: w * 0.30, infoH: h * 0.24
+        };
+    }
+
+    pathPoint(seg, s) {
+        const len = seg.s1 - seg.s0;
+        if (len <= 0) return { x: seg.x0, y: seg.y0 };
+        const t = (s - seg.s0) / len;
+        return { x: seg.x0 + (seg.x1 - seg.x0) * t, y: seg.y0 + (seg.y1 - seg.y0) * t };
+    }
+
+    pathPointAt(g, s) {
+        for (const seg of g.wireSegs) {
+            if (s >= seg.s0 && s <= seg.s1) return this.pathPoint(seg, s);
+        }
+        return null;
+    }
+
+
+    /* ---------- Background ---------- */
+    drawBackground() {
+        const ctx = this.ctx;
+        ctx.fillStyle = '#FFFFE0';
+        ctx.fillRect(0, 0, this.width, this.height);
+        ctx.save();
+        ctx.strokeStyle = 'rgba(0,102,204,0.06)';
+        ctx.lineWidth = 1;
+        const step = 40;
+        for (let x = 0; x < this.width; x += step) {
+            ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, this.height); ctx.stroke();
+        }
+        for (let y = 0; y < this.height; y += step) {
+            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(this.width, y); ctx.stroke();
+        }
+        ctx.restore();
+    }
+
+    /* ---------- P-N Junction ---------- */
+    drawJunction(g) {
+        const ctx = this.ctx;
+        const m = this.physics.mat;
+        const depW = this.physics.depletionFactor();
+        const halfBase = (g.depRightBase - g.depLeftBase) / 2;
+        const halfDep = halfBase * depW;
+        const junX = (g.depLeftBase + g.depRightBase) / 2;
+        const depLeft = junX - halfDep;
+        const depRight = junX + halfDep;
+
+        // Shadow
+        ctx.save();
+        ctx.shadowColor = 'rgba(0,0,0,0.18)';
+        ctx.shadowBlur = 22;
+        ctx.shadowOffsetY = 4;
+        ctx.fillStyle = 'rgba(0,0,0,0.0001)';
+        ctx.fillRect(g.junX0, g.junY0, g.junX1 - g.junX0, g.junY1 - g.junY0);
+        ctx.restore();
+
+        // P-region (everything left of depLeft)
+        ctx.save();
+        const pGrad = ctx.createLinearGradient(g.pX0, g.junY0, depLeft, g.junY0);
+        pGrad.addColorStop(0, rgba(m.p_color, 0.95));
+        pGrad.addColorStop(1, rgba(m.p_color, 0.55));
+        ctx.fillStyle = pGrad;
+        ctx.fillRect(g.pX0, g.junY0, depLeft - g.pX0, g.junY1 - g.junY0);
+
+        // N-region
+        const nGrad = ctx.createLinearGradient(depRight, g.junY0, g.nX1, g.junY0);
+        nGrad.addColorStop(0, rgba(m.n_color, 0.55));
+        nGrad.addColorStop(1, rgba(m.n_color, 0.95));
+        ctx.fillStyle = nGrad;
+        ctx.fillRect(depRight, g.junY0, g.nX1 - depRight, g.junY1 - g.junY0);
+
+        // Depletion region
+        const dGrad = ctx.createLinearGradient(depLeft, 0, depRight, 0);
+        dGrad.addColorStop(0,   'rgba(255,235,180,0.95)');
+        dGrad.addColorStop(0.5, 'rgba(255,250,220,0.95)');
+        dGrad.addColorStop(1,   'rgba(255,235,180,0.95)');
+        ctx.fillStyle = dGrad;
+        ctx.fillRect(depLeft, g.junY0, depRight - depLeft, g.junY1 - g.junY0);
+
+        // Edges
+        ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.lineWidth = 1.2;
+        ctx.strokeRect(g.junX0, g.junY0, g.junX1 - g.junX0, g.junY1 - g.junY0);
+
+        // Junction line
+        ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
+        ctx.beginPath(); ctx.moveTo(junX, g.junY0); ctx.lineTo(junX, g.junY1); ctx.stroke();
+        ctx.setLineDash([]);
+
+        // P / N letters
+        ctx.fillStyle = 'rgba(255,255,255,0.6)';
+        ctx.font = 'bold 64px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const midY = (g.junY0 + g.junY1) / 2;
+        ctx.fillText('P', (g.pX0 + depLeft) / 2, midY);
+        ctx.fillText('N', (depRight + g.nX1) / 2, midY);
+
+        // Fixed dopant ions in depletion region
+        // Acceptors (negative) on P-side of depletion, donors (positive) on N-side
+        ctx.font = 'bold 11px Arial';
+        ctx.textBaseline = 'middle';
+        const ions = 4;
+        for (let i = 0; i < ions; i++) {
+            const yi = g.junY0 + 12 + (i + 0.5) * (g.junY1 - g.junY0 - 24) / ions;
+            // P-side acceptor (-)
+            ctx.fillStyle = 'rgba(180,40,60,0.85)';
+            ctx.beginPath(); ctx.arc(depLeft + (junX - depLeft) * 0.3, yi, 7, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#fff';
+            ctx.fillText('−', depLeft + (junX - depLeft) * 0.3, yi);
+            // N-side donor (+)
+            ctx.fillStyle = 'rgba(40,80,180,0.85)';
+            ctx.beginPath(); ctx.arc(junX + (depRight - junX) * 0.7, yi, 7, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#fff';
+            ctx.fillText('+', junX + (depRight - junX) * 0.7, yi);
+        }
+        ctx.restore();
+
+        // Recombination flashes
+        ctx.save();
+        for (const f of this.physics.recombineFlashes) {
+            const r = (1 - f.life) * 14;
+            const grad = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, r);
+            grad.addColorStop(0, `rgba(255,230,120,${f.life})`);
+            grad.addColorStop(1, 'rgba(255,230,120,0)');
+            ctx.fillStyle = grad;
+            ctx.beginPath(); ctx.arc(f.x, f.y, r, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.restore();
+
+        // E-field arrows in depletion region (from N → P, conventional)
+        if (this.toggles.vectors) {
+            ctx.save();
+            ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+            ctx.fillStyle = 'rgba(0,0,0,0.55)';
+            ctx.lineWidth = 1.5;
+            const arrows = 3;
+            for (let i = 0; i < arrows; i++) {
+                const yy = g.junY0 + 18 + (i + 0.5) * (g.junY1 - g.junY0 - 36) / arrows;
+                const ax0 = depRight - 8, ax1 = depLeft + 8;
+                ctx.beginPath(); ctx.moveTo(ax0, yy); ctx.lineTo(ax1, yy); ctx.stroke();
+                // arrowhead
+                ctx.beginPath();
+                ctx.moveTo(ax1, yy);
+                ctx.lineTo(ax1 + 6, yy - 4);
+                ctx.lineTo(ax1 + 6, yy + 4);
+                ctx.closePath(); ctx.fill();
+            }
+            ctx.restore();
+        }
+    }
+
+
+    /* ---------- Carriers (mobile) ---------- */
+    drawCarriers(g) {
+        if (!this.toggles.carriers) return;
+        const ctx = this.ctx;
+        ctx.save();
+
+        // Holes (red, +)
+        for (const h of this.physics.holes) {
+            this._drawCarrier(ctx, h.x, h.y, '+', '#d44a64');
+        }
+        // Electrons (blue, -)
+        for (const e of this.physics.electrons) {
+            this._drawCarrier(ctx, e.x, e.y, '−', '#3a78d8');
+        }
+        // Minority — drawn smaller and dimmer
+        for (const me of this.physics.minorityElectrons) {
+            this._drawCarrier(ctx, me.x, me.y, '−', 'rgba(58,120,216,0.55)', true);
+        }
+        for (const mh of this.physics.minorityHoles) {
+            this._drawCarrier(ctx, mh.x, mh.y, '+', 'rgba(212,74,100,0.55)', true);
+        }
+        ctx.restore();
+    }
+
+    _drawCarrier(ctx, x, y, sign, color, minor=false) {
+        const r = minor ? 4 : 6;
+        // halo
+        const grad = ctx.createRadialGradient(x, y, 0, x, y, r * 2.2);
+        grad.addColorStop(0, color);
+        grad.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath(); ctx.arc(x, y, r * 2, 0, Math.PI * 2); ctx.fill();
+        // core
+        ctx.fillStyle = color;
+        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+        // sign
+        ctx.fillStyle = '#fff';
+        ctx.font = `bold ${minor ? 9 : 11}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(sign, x, y + 0.5);
+    }
+
+    /* ---------- Circuit ---------- */
+    drawCircuit(g) {
+        const ctx = this.ctx;
+        const ph = this.physics;
+        ctx.save();
+
+        // Wires — thicker, blue
+        ctx.strokeStyle = '#222';
+        ctx.lineWidth = 2.5;
+        for (const seg of g.wireSegs) {
+            ctx.beginPath();
+            ctx.moveTo(seg.x0, seg.y0);
+            ctx.lineTo(seg.x1, seg.y1);
+            ctx.stroke();
+        }
+
+        // Connection nubs
+        ctx.fillStyle = '#222';
+        ctx.beginPath(); ctx.arc(g.pAnodeX, g.pAnodeY, 3, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(g.nCathX, g.nCathY, 3, 0, Math.PI*2); ctx.fill();
+
+        // Battery
+        this._drawBattery(g);
+        // Resistor
+        this._drawResistor(g);
+        // Ammeter (in line)
+        this._drawAmmeter(g);
+        // Voltmeter (across diode)
+        this._drawVoltmeter(g);
+
+        // Animated current dots along wire path
+        for (const d of ph.wireDots) {
+            const p = this.pathPointAt(g, d.s);
+            if (!p) continue;
+            const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, 6);
+            grad.addColorStop(0, d.color);
+            grad.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = grad;
+            ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = d.color;
+            ctx.beginPath(); ctx.arc(p.x, p.y, 2.2, 0, Math.PI*2); ctx.fill();
+        }
+        ctx.restore();
+    }
+
+    _drawBattery(g) {
+        const ctx = this.ctx;
+        const ph = this.physics;
+        const x = g.battX;
+        const y = g.cBotY;
+
+        // Battery cell (two plates).  Polarity flips with bias.
+        // Forward: + on left (toward P), - on right (toward N)
+        // Reverse: + on right (toward N), - on left (toward P)
+        const forward = ph.biasMode === 'forward';
+
+        // Wires inward already drawn. Plates:
+        const plateGap = 12;
+        ctx.lineWidth = 2.5;
+        ctx.strokeStyle = '#222';
+        // long plate (+) — left if forward
+        ctx.beginPath();
+        ctx.moveTo(x - plateGap/2, y - 18);
+        ctx.lineTo(x - plateGap/2, y + 18);
+        ctx.stroke();
+        // short plate (-) — right
+        ctx.beginPath();
+        ctx.moveTo(x + plateGap/2, y - 11);
+        ctx.lineTo(x + plateGap/2, y + 11);
+        ctx.stroke();
+
+        // Polarity labels
+        ctx.font = 'bold 14px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = forward ? '#0066cc' : '#ff2e63';
+        ctx.fillText(forward ? '+' : '−', x - plateGap/2 - 9, y - 26);
+        ctx.fillStyle = forward ? '#ff2e63' : '#0066cc';
+        ctx.fillText(forward ? '−' : '+', x + plateGap/2 + 9, y - 26);
+
+        // Voltage label
+        ctx.fillStyle = '#333';
+        ctx.font = 'bold 11px Arial';
+        ctx.fillText(`${(forward ? '+' : '−')}${ph.V_supply.toFixed(2)} V`, x, y + 32);
+    }
+
+
+    _drawResistor(g) {
+        const ctx = this.ctx;
+        const x = g.resX, y = g.cBotY;
+        const w = 38, h = 14;
+        ctx.save();
+        // Body
+        ctx.fillStyle = '#f0e0c0';
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.roundRect(x - w/2, y - h/2, w, h, 3);
+        ctx.fill(); ctx.stroke();
+        // Color bands
+        const bandColors = ['#a04020', '#000', '#202020', '#caa53d'];
+        for (let i = 0; i < 4; i++) {
+            ctx.fillStyle = bandColors[i];
+            ctx.fillRect(x - w/2 + 6 + i * 6, y - h/2 + 1, 2, h - 2);
+        }
+        // Label
+        ctx.fillStyle = '#333';
+        ctx.font = 'bold 10px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(`R = ${this.physics.R_load} Ω`, x, y + 24);
+        ctx.restore();
+    }
+
+    _drawAmmeter(g) {
+        const ctx = this.ctx;
+        const ph = this.physics;
+        const x = g.ammX, y = g.cBotY;
+        ctx.save();
+        // Outer ring
+        ctx.fillStyle = '#fff';
+        ctx.strokeStyle = '#333'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(x, y, 16, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+        // 'A'
+        ctx.fillStyle = '#0066cc';
+        ctx.font = 'bold 14px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('A', x, y);
+        // Reading
+        const I = ph.I;
+        let txt;
+        if (Math.abs(I) >= 1e-3) txt = `${(I*1000).toFixed(2)} mA`;
+        else if (Math.abs(I) >= 1e-6) txt = `${(I*1e6).toFixed(2)} µA`;
+        else if (Math.abs(I) >= 1e-9) txt = `${(I*1e9).toFixed(2)} nA`;
+        else                       txt = `${(I*1e12).toFixed(2)} pA`;
+        ctx.fillStyle = '#333';
+        ctx.font = 'bold 10px Arial';
+        ctx.fillText(`I = ${txt}`, x, y + 30);
+        ctx.restore();
+    }
+
+    _drawVoltmeter(g) {
+        const ctx = this.ctx;
+        const ph = this.physics;
+        // Voltmeter floats above the diode, with dotted probes
+        const vmX = (g.junX0 + g.junX1) / 2;
+        const vmY = g.junY0 - 50;
+        ctx.save();
+        // Probes
+        ctx.strokeStyle = 'rgba(0,102,204,0.6)';
+        ctx.lineWidth = 1.2;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(g.junX0 + 18, g.junY0);
+        ctx.lineTo(g.junX0 + 18, g.junY0 - 25);
+        ctx.lineTo(vmX - 18, vmY);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(g.junX1 - 18, g.junY0);
+        ctx.lineTo(g.junX1 - 18, g.junY0 - 25);
+        ctx.lineTo(vmX + 18, vmY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // Body
+        ctx.fillStyle = '#fff';
+        ctx.strokeStyle = '#333'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(vmX, vmY, 18, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#0066cc';
+        ctx.font = 'bold 16px Arial';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('V', vmX, vmY);
+        // Reading
+        ctx.fillStyle = '#333';
+        ctx.font = 'bold 10px Arial';
+        const Vd = ph.V_d;
+        let vTxt;
+        if (Math.abs(Vd) >= 1) vTxt = `${Vd.toFixed(3)} V`;
+        else                   vTxt = `${(Vd*1000).toFixed(1)} mV`;
+        ctx.fillText(`V_d = ${vTxt}`, vmX, vmY - 28);
+        ctx.restore();
+    }
+
+
+    /* ---------- Educational labels ---------- */
+    drawLabels(g) {
+        if (!this.toggles.labels) return;
+        const ctx = this.ctx;
+        const ph = this.physics;
+        const m = ph.mat;
+        const depW = ph.depletionFactor();
+        const halfBase = (g.depRightBase - g.depLeftBase) / 2;
+        const halfDep = halfBase * depW;
+        const junX = (g.depLeftBase + g.depRightBase) / 2;
+
+        ctx.save();
+        ctx.font = 'bold 11px Arial';
+        ctx.fillStyle = '#333';
+
+        // 1. Depletion Layer
+        const dlX = junX, dlY = g.junY1 + 30;
+        this._drawCallout(ctx, dlX, dlY, dlX, g.junY1 + 4, 'Depletion Layer');
+
+        // 2. Barrier potential
+        ctx.fillStyle = '#b87800';
+        const bpX = junX, bpY = g.junY0 - 12;
+        ctx.font = 'bold 10px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(`Barrier: ${m.Vbi.toFixed(2)} V`, bpX, bpY);
+
+        // 3. Majority carriers
+        ctx.fillStyle = '#a02040';
+        ctx.textAlign = 'left';
+        ctx.fillText('Majority: Holes (h⁺)', g.pX0 + 6, g.junY1 + 14);
+        ctx.fillStyle = '#2050a0';
+        ctx.textAlign = 'right';
+        ctx.fillText('Majority: Electrons (e⁻)', g.nX1 - 6, g.junY1 + 14);
+
+        // 4. Minority labels
+        ctx.fillStyle = 'rgba(60,90,180,0.7)';
+        ctx.font = '9px Arial';
+        ctx.textAlign = 'left';
+        ctx.fillText('minority e⁻', g.pX0 + 6, g.junY0 - 4);
+        ctx.fillStyle = 'rgba(180,60,90,0.7)';
+        ctx.textAlign = 'right';
+        ctx.fillText('minority h⁺', g.nX1 - 6, g.junY0 - 4);
+
+        ctx.restore();
+    }
+
+    _drawCallout(ctx, lx, ly, tx, ty, text) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+        ctx.fillStyle = 'rgba(0,0,0,0.85)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(lx, ly);
+        ctx.lineTo(tx, ty);
+        ctx.stroke();
+        // tiny arrowhead
+        const dx = tx - lx, dy = ty - ly;
+        const a = Math.atan2(dy, dx);
+        ctx.beginPath();
+        ctx.moveTo(tx, ty);
+        ctx.lineTo(tx - 6 * Math.cos(a - 0.4), ty - 6 * Math.sin(a - 0.4));
+        ctx.lineTo(tx - 6 * Math.cos(a + 0.4), ty - 6 * Math.sin(a + 0.4));
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(0,0,0,0.75)';
+        ctx.fill();
+        // text
+        ctx.fillStyle = '#222';
+        ctx.font = 'bold 11px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText(text, lx, ly + 2);
+        ctx.restore();
+    }
+
+
+    /* ---------- I-V Graph ---------- */
+    drawGraph(g) {
+        if (!this.toggles.graph) return;
+        const ctx = this.ctx;
+        const ph = this.physics;
+        const m = ph.mat;
+
+        const X = g.graphX, Y = g.graphY, W = g.graphW, H = g.graphH;
+        ctx.save();
+        ctx.fillStyle = 'rgba(255,255,240,0.92)';
+        ctx.shadowColor = 'rgba(0,0,0,0.15)'; ctx.shadowBlur = 15;
+        ctx.beginPath(); ctx.roundRect(X, Y, W, H, 12); ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = 'rgba(0,0,0,0.1)'; ctx.stroke();
+
+        ctx.fillStyle = '#0066cc';
+        ctx.font = 'bold 13px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('I-V Characteristic Curve', X + W/2, Y + 20);
+
+        const padL = 56, padR = 16, padT = 32, padB = 28;
+        const pX = X + padL, pY = Y + padT;
+        const pW = W - padL - padR;
+        const pH = H - padT - padB;
+
+        // Domain
+        const Vmin = -m.Vbr * 1.05, Vmax = m.Vbi + 0.6;
+        // Symlog-style mapping for current: use sign(I) * log10(1 + |I|/I_ref)
+        const I_ref = 1e-12;
+        const Imax = Math.max(0.05, Math.abs(this.physics.diodeI(m.Vbi + 0.6)) * 1.1);
+        const sym = (i) => Math.sign(i) * Math.log10(1 + Math.abs(i) / I_ref);
+        const symMax = sym(Imax);
+        const symMin = sym(-Imax);
+
+        const mapX = (V) => pX + ((V - Vmin) / (Vmax - Vmin)) * pW;
+        const mapY = (i) => pY + pH - ((sym(i) - symMin) / (symMax - symMin)) * pH;
+
+        // Axes
+        ctx.strokeStyle = '#555'; ctx.lineWidth = 1;
+        // Y-axis at V = 0
+        const x0 = mapX(0);
+        ctx.beginPath();
+        ctx.moveTo(x0, pY); ctx.lineTo(x0, pY + pH); ctx.stroke();
+        // X-axis at I = 0
+        const y0 = mapY(0);
+        ctx.beginPath();
+        ctx.moveTo(pX, y0); ctx.lineTo(pX + pW, y0); ctx.stroke();
+
+        // Knee voltage line
+        ctx.strokeStyle = 'rgba(0,170,102,0.5)';
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.moveTo(mapX(m.knee), pY);
+        ctx.lineTo(mapX(m.knee), pY + pH);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = 'rgba(0,170,102,0.85)';
+        ctx.font = '9px Arial';
+        ctx.textAlign = 'left';
+        ctx.fillText(`knee ${m.knee}V`, mapX(m.knee) + 3, pY + 9);
+
+        // Breakdown line
+        ctx.strokeStyle = 'rgba(255,170,0,0.5)';
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.moveTo(mapX(-m.Vbr), pY);
+        ctx.lineTo(mapX(-m.Vbr), pY + pH);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = 'rgba(184,120,0,0.85)';
+        ctx.fillText(`V_BR = -${m.Vbr}V`, mapX(-m.Vbr) + 3, pY + 21);
+
+        // I-V curve
+        ctx.strokeStyle = '#0066cc';
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        const NS = 240;
+        for (let i = 0; i <= NS; i++) {
+            const V = Vmin + (Vmax - Vmin) * i / NS;
+            const I = this.physics.diodeI(V);
+            const px = mapX(V), py = mapY(Math.max(-Imax, Math.min(Imax, I)));
+            if (i === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+
+        // Operating point
+        const opx = mapX(ph.V_d), opy = mapY(Math.max(-Imax, Math.min(Imax, ph.I)));
+        ctx.fillStyle = '#ff2e63';
+        ctx.beginPath(); ctx.arc(opx, opy, 6, 0, Math.PI*2); ctx.fill();
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+
+        // Axis labels
+        ctx.fillStyle = '#333';
+        ctx.font = '10px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('V_d (V)', X + W/2, Y + H - 8);
+        ctx.save();
+        ctx.translate(X + 18, Y + H/2);
+        ctx.rotate(-Math.PI/2);
+        ctx.fillText('I (sym-log)', 0, 0);
+        ctx.restore();
+
+        // Tick labels for V
+        ctx.font = '9px Arial';
+        ctx.textAlign = 'center';
+        const ticks = [Vmin, Vmin/2, 0, m.knee, m.Vbi];
+        for (const t of ticks) {
+            if (t < Vmin || t > Vmax) continue;
+            ctx.fillStyle = '#666';
+            ctx.fillText(t.toFixed(1), mapX(t), pY + pH + 12);
+        }
+        ctx.restore();
+    }
+
+
+    /* ---------- Info panel ---------- */
+    drawInfoPanel(g) {
+        const ctx = this.ctx;
+        const ph = this.physics;
+        const m = ph.mat;
+        const X = g.infoX, Y = g.infoY, W = g.infoW, H = g.infoH;
+
+        ctx.save();
+        ctx.fillStyle = 'rgba(255,255,240,0.92)';
+        ctx.shadowColor = 'rgba(0,0,0,0.15)'; ctx.shadowBlur = 14;
+        ctx.beginPath(); ctx.roundRect(X, Y, W, H, 12); ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = 'rgba(0,0,0,0.1)'; ctx.stroke();
+
+        ctx.fillStyle = '#0066cc';
+        ctx.font = 'bold 13px Arial';
+        ctx.textAlign = 'left';
+        ctx.fillText('Operating Point', X + 16, Y + 20);
+
+        // Equation
+        ctx.fillStyle = '#222';
+        ctx.font = '11px Arial';
+        ctx.fillText('I = Iₛ ( exp(V_d / nV_T) − 1 )', X + 16, Y + 38);
+
+        const lines = [
+            { lab: 'Material',          val: `${m.name} (${ph.material})`, c: '#333' },
+            { lab: 'Bias mode',         val: ph.biasMode === 'forward' ? 'Forward' : 'Reverse',
+                                        c: ph.biasMode === 'forward' ? '#00aa66' : '#ff2e63' },
+            { lab: 'V_supply',          val: `${(ph.biasMode==='forward'?'+':'−')}${ph.V_supply.toFixed(2)} V`, c: '#333' },
+            { lab: 'V_d (across diode)', val: `${ph.V_d.toFixed(3)} V`, c: '#0066cc' },
+            { lab: 'Current I',         val: this._fmtI(ph.I), c: '#0066cc' },
+            { lab: 'Vt (kT/q)',         val: `${(ph.Vt*1000).toFixed(1)} mV`, c: '#666' },
+            { lab: 'Iₛ',                val: `${m.Is.toExponential(0)} A`, c: '#666' },
+            { lab: 'Knee voltage',      val: `${m.knee.toFixed(2)} V`, c: '#666' }
+        ];
+        ctx.font = '11px Arial';
+        const cols = 2;
+        const colW = (W - 32) / cols;
+        for (let i = 0; i < lines.length; i++) {
+            const col = i % cols;
+            const row = Math.floor(i / cols);
+            const lx = X + 16 + col * colW;
+            const ly = Y + 60 + row * 18;
+            ctx.fillStyle = '#444';
+            ctx.fillText(lines[i].lab, lx, ly);
+            ctx.fillStyle = lines[i].c;
+            ctx.textAlign = 'right';
+            ctx.fillText(lines[i].val, lx + colW - 10, ly);
+            ctx.textAlign = 'left';
+        }
+        ctx.restore();
+    }
+
+    _fmtI(I) {
+        const a = Math.abs(I);
+        if (a >= 1e-3)  return `${(I*1e3).toFixed(2)} mA`;
+        if (a >= 1e-6)  return `${(I*1e6).toFixed(2)} µA`;
+        if (a >= 1e-9)  return `${(I*1e9).toFixed(2)} nA`;
+        return `${(I*1e12).toFixed(2)} pA`;
+    }
+
+    draw() {
+        const g = this.geometry();
+        this.drawBackground();
+        this.drawJunction(g);
+        this.drawCarriers(g);
+        this.drawCircuit(g);
+        this.drawLabels(g);
+        this.drawGraph(g);
+        this.drawInfoPanel(g);
+    }
+}
+
+
+/* =====================================================================
+   App — UI bindings + main loop
+   ===================================================================== */
+class App {
+    constructor() {
+        this.physics = new PhysicsEngine();
+        this.renderer = new Renderer('simCanvas', this.physics);
+        this.physics.initCarriers(this.renderer.geometry());
+        this.state = { isPlaying: true };
+        this.lastTime = 0;
+        this.initUI();
+        this.bindEvents();
+        this.updateAll();
+        requestAnimationFrame((t) => this.loop(t));
+    }
+
+    initUI() {
+        this.els = {
+            play: document.getElementById('playBtn'),
+            reset: document.getElementById('resetBtn'),
+            biasFwd: document.getElementById('biasFwd'),
+            biasRev: document.getElementById('biasRev'),
+            tCarriers: document.getElementById('togCarriers'),
+            tLabels: document.getElementById('togLabels'),
+            tGraph: document.getElementById('togGraph'),
+            tVectors: document.getElementById('togVectors'),
+            sVolt: document.getElementById('voltSlider'),
+            sR: document.getElementById('rSlider'),
+            sT: document.getElementById('tSlider'),
+            sSpeed: document.getElementById('speedSlider'),
+            status: document.getElementById('bias-status'),
+            matBtns: document.querySelectorAll('.btn.metal')
+        };
+    }
+
+    syncVoltageRange() {
+        // Forward: 0..3V (fine), Reverse: 0..60V (covers breakdown)
+        if (this.physics.biasMode === 'forward') {
+            this.els.sVolt.min = '0'; this.els.sVolt.max = '3'; this.els.sVolt.step = '0.01';
+            if (parseFloat(this.els.sVolt.value) > 3) this.els.sVolt.value = '1.0';
+        } else {
+            this.els.sVolt.min = '0'; this.els.sVolt.max = '60'; this.els.sVolt.step = '0.1';
+            if (parseFloat(this.els.sVolt.value) > 60) this.els.sVolt.value = '5';
+        }
+    }
+
+    updateAll() {
+        const ph = this.physics;
+        ph.V_supply = parseFloat(this.els.sVolt.value);
+        ph.R_load   = parseFloat(this.els.sR.value);
+        ph.T        = parseFloat(this.els.sT.value);
+        ph.simSpeed = parseFloat(this.els.sSpeed.value);
+
+        document.getElementById('voltDisp').textContent = ph.V_supply.toFixed(2);
+        document.getElementById('rDisp').textContent = ph.R_load;
+        document.getElementById('tDisp').textContent = ph.T;
+        document.getElementById('speedDisp').textContent = ph.simSpeed.toFixed(1) + 'x';
+
+        this.physics.solve();
+        this.updateStatus();
+    }
+
+    updateStatus() {
+        const ph = this.physics;
+        const node = this.els.status;
+        const m = ph.mat;
+        node.classList.remove('reverse', 'breakdown');
+        if (ph.biasMode === 'forward') {
+            if (ph.V_d >= m.knee * 0.95)
+                node.textContent = `FORWARD BIAS — Conducting (I = ${this._fmt(ph.I)})`;
+            else
+                node.textContent = `FORWARD BIAS — Below Knee (V_d = ${ph.V_d.toFixed(2)}V)`;
+        } else {
+            if (ph.V_d <= -m.Vbr * 0.95) {
+                node.textContent = `REVERSE BREAKDOWN — Avalanche (I = ${this._fmt(ph.I)})`;
+                node.classList.add('breakdown');
+            } else {
+                node.textContent = `REVERSE BIAS — Blocking (I = ${this._fmt(ph.I)})`;
+                node.classList.add('reverse');
+            }
+        }
+        node.classList.add('visible');
+    }
+    _fmt(I) {
+        const a = Math.abs(I);
+        if (a >= 1e-3) return `${(I*1e3).toFixed(2)} mA`;
+        if (a >= 1e-6) return `${(I*1e6).toFixed(2)} µA`;
+        if (a >= 1e-9) return `${(I*1e9).toFixed(2)} nA`;
+        return `${(I*1e12).toFixed(2)} pA`;
+    }
+
+
+    bindEvents() {
+        [this.els.sVolt, this.els.sR, this.els.sT, this.els.sSpeed].forEach(s => {
+            s.addEventListener('input', () => this.updateAll());
+        });
+
+        this.els.play.onclick = () => {
+            this.state.isPlaying = !this.state.isPlaying;
+            this.els.play.textContent = this.state.isPlaying ? '❚❚ Pause' : '▶ Play';
+            this.els.play.classList.toggle('playing', this.state.isPlaying);
+        };
+        this.els.reset.onclick = () => {
+            this.physics.reset(this.renderer.geometry());
+            this.updateAll();
+        };
+
+        const setupToggle = (btn, key) => {
+            btn.onclick = () => {
+                this.renderer.toggles[key] = !this.renderer.toggles[key];
+                btn.classList.toggle('active', this.renderer.toggles[key]);
+            };
+        };
+        setupToggle(this.els.tCarriers, 'carriers');
+        setupToggle(this.els.tLabels,   'labels');
+        setupToggle(this.els.tGraph,    'graph');
+        setupToggle(this.els.tVectors,  'vectors');
+
+        const setBias = (mode) => {
+            this.physics.biasMode = mode;
+            this.els.biasFwd.classList.toggle('active', mode === 'forward');
+            this.els.biasRev.classList.toggle('active', mode === 'reverse');
+            this.syncVoltageRange();
+            this.updateAll();
+        };
+        this.els.biasFwd.onclick = () => setBias('forward');
+        this.els.biasRev.onclick = () => setBias('reverse');
+
+        this.els.matBtns.forEach(btn => {
+            btn.onclick = () => {
+                this.els.matBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                this.physics.material = btn.dataset.mat;
+                this.updateAll();
+            };
+        });
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                this._wasPlaying = this.state.isPlaying;
+                this.state.isPlaying = false;
+            } else {
+                if (this._wasPlaying) {
+                    this.state.isPlaying = true;
+                    this.els.play.textContent = '❚❚ Pause';
+                    this.els.play.classList.add('playing');
+                }
+                this.lastTime = 0;
+            }
+        });
+    }
+
+    loop(timestamp) {
+        if (!this.lastTime) this.lastTime = timestamp;
+        const deltaMs = timestamp - this.lastTime;
+        this.lastTime = timestamp;
+
+        if (this.state.isPlaying) {
+            const dt = Math.min(deltaMs / 1000, 0.05) * this.physics.simSpeed;
+            this.renderer.time += dt;
+            const g = this.renderer.geometry();
+            this.physics.update(dt, g);
+        }
+        this.renderer.draw();
+        requestAnimationFrame((t) => this.loop(t));
+    }
+}
+
+/* ---------- bootstrap ---------- */
+document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => {
+        const loader = document.getElementById('loader');
+        if (loader) {
+            loader.style.opacity = '0';
+            setTimeout(() => loader.remove(), 600);
+        }
+    }, 800);
+
+    const app = new App();
+
+    function resizeAppWrapper() {
+        const ww = window.innerWidth, wh = window.innerHeight;
+        const baseW = 1400, baseH = 800;
+        const scale = Math.min(ww / baseW, wh / baseH);
+        const wrap = document.getElementById('app-wrapper');
+        if (wrap) {
+            wrap.style.width  = (ww / scale) + 'px';
+            wrap.style.height = (wh / scale) + 'px';
+            wrap.style.transform = `scale(${scale})`;
+        }
+        app.renderer.zoomAutoFit();
+        app.physics.initCarriers(app.renderer.geometry());
+    }
+    window.addEventListener('resize', resizeAppWrapper);
+    resizeAppWrapper();
+});
+</script>
+</body>
+</html>
