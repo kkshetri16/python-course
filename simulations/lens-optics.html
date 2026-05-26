@@ -1,0 +1,1315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lens Optics: Convex / Concave Lab</title>
+    <link rel="icon" type="image/png" href="webicon.png">
+    <style>
+        :root {
+            --bg: #FFFFE0;
+            --panel-bg: rgba(255,255,230,0.92);
+            --blue: #0066cc;
+            --blue-glow: rgba(0,102,204,0.35);
+            --green: #00aa66;
+            --red: #ff2e63;
+            --orange: #ff8800;
+            --magenta: #d63aaa;
+            --text: #1a1a2e;
+            --border: rgba(0,0,0,0.13);
+            --muted: rgba(0,102,204,0.18);
+        }
+        * { box-sizing: border-box; user-select: none; -webkit-font-smoothing: antialiased; margin: 0; padding: 0; }
+        body {
+            font-family: 'Arial', sans-serif; background: var(--bg); color: var(--text);
+            margin: 0; height: 100vh; overflow: hidden;
+        }
+        #app-wrapper {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            transform-origin: 0 0; overflow: hidden;
+            display: flex; flex-direction: column; background-color: var(--bg);
+        }
+        header { position: absolute; top: 20px; left: 30px; z-index: 10; pointer-events: none; }
+        h1 {
+            margin: 0; font-size: 2.4rem; font-weight: 700; letter-spacing: 3px;
+            text-transform: uppercase; color: var(--blue);
+            text-shadow: 0 0 18px rgba(0,102,204,0.25);
+        }
+        h1 span { color: #888; font-weight: 400; font-size: 1rem; display: block; letter-spacing: 4px; margin-top: -4px; }
+        .viewport { flex: 1; position: relative; width: 100%; height: 100%; }
+        canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+        canvas:active { cursor: grabbing; }
+
+
+
+        /* Bottom controls panel — same style as Stokes */
+        .controls-container {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            width: 95%; max-width: 1300px;
+            background: var(--panel-bg); backdrop-filter: blur(14px);
+            border: 1px solid var(--border); border-radius: 12px; padding: 15px 20px;
+            display: flex; flex-wrap: wrap; gap: 14px; align-items: center; justify-content: center;
+            z-index: 20; box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+        }
+        .btn {
+            padding: 8px 14px; background: transparent; border: 1.5px solid var(--blue);
+            color: var(--blue); border-radius: 6px; font-weight: 600; font-size: 0.78rem;
+            letter-spacing: 0.5px; text-transform: uppercase; cursor: pointer; transition: all 0.2s;
+            display: flex; align-items: center; justify-content: center; gap: 4px;
+            white-space: nowrap;
+        }
+        .btn:hover { box-shadow: 0 0 8px var(--blue-glow); background: var(--muted); }
+        .btn.active { background: var(--blue); color: #fff; box-shadow: 0 0 12px var(--blue-glow); }
+        .btn.active-green { border-color: var(--green); color: var(--green); }
+        .btn.active-green.playing { background: var(--green); color: #fff; box-shadow: 0 0 15px rgba(0,170,102,0.4); }
+        .btn.active-red { border-color: var(--red); color: var(--red); }
+        .btn.active-red:hover { background: rgba(255,46,99,0.1); box-shadow: 0 0 12px rgba(255,46,99,0.3); }
+        .btn.tiny { padding: 6px 10px; font-size: 0.7rem; }
+        .slider-group { width: 145px; display: flex; flex-direction: column; gap: 4px; }
+        .slider-header {
+            display: flex; justify-content: space-between;
+            font-size: 0.72rem; letter-spacing: 0.3px; color: var(--blue); font-weight: bold;
+        }
+        .slider-val { font-weight: 700; color: #333; font-size: 0.72rem; }
+        .divider { width: 1px; height: 38px; background: var(--border); }
+        .mode-group { display: flex; gap: 6px; align-items: center; }
+        .label-tiny { font-size: 0.7rem; font-weight: 700; color: var(--blue); letter-spacing: 0.3px; margin-right: 2px; }
+        input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%;
+            background: var(--blue); cursor: pointer; margin-top: -6px;
+            box-shadow: 0 0 8px var(--blue-glow); border: 2px solid #fff; transition: transform 0.1s;
+        }
+        input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.15); }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 4px; background: rgba(0,0,0,0.15); border-radius: 2px;
+        }
+
+        /* Loader (same as other sims) */
+        #loader {
+            position: fixed; inset: 0; background: var(--bg); z-index: 200;
+            display: flex; align-items: center; justify-content: center;
+            flex-direction: column; gap: 18px; transition: opacity 0.6s;
+        }
+        #loader h2 { font-family: 'Arial', sans-serif; font-size: 1.8rem; color: var(--blue); letter-spacing: 4px; }
+        .loader-bar { width: 280px; height: 3px; background: #ddd; border-radius: 2px; overflow: hidden; }
+        .loader-fill { height: 100%; background: var(--blue); animation: loadFill 0.8s ease-out forwards; }
+        @keyframes loadFill { from { width: 0 } to { width: 100% } }
+
+
+
+        /* Object selector (top-left, just below title) */
+        #obj-selector {
+            position: absolute; top: 100px; left: 30px; z-index: 12;
+            background: rgba(255,255,240,0.92); backdrop-filter: blur(8px);
+            border: 1px solid var(--border); border-radius: 12px;
+            padding: 10px 12px;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.10);
+            display: flex; flex-direction: column; gap: 8px; min-width: 220px;
+        }
+        #obj-selector .title {
+            font-size: 0.7rem; font-weight: 700; letter-spacing: 1.5px;
+            color: var(--blue); text-transform: uppercase;
+        }
+        .tab-row { display: flex; gap: 6px; }
+        .tab-btn {
+            flex: 1; padding: 7px 10px; font-size: 0.72rem; font-weight: 700;
+            letter-spacing: 0.5px; text-transform: uppercase; cursor: pointer;
+            background: transparent; border: 1.5px solid var(--blue); color: var(--blue);
+            border-radius: 6px; transition: all 0.2s;
+        }
+        .tab-btn:hover { background: var(--muted); }
+        .tab-btn.active { background: var(--blue); color: #fff; box-shadow: 0 0 10px var(--blue-glow); }
+        .opt-row { display: flex; gap: 5px; }
+        .opt-btn {
+            flex: 1; padding: 6px 8px; font-size: 0.68rem; font-weight: 600;
+            cursor: pointer; background: transparent; border: 1px solid var(--border);
+            color: #555; border-radius: 5px; transition: all 0.15s; text-align: center;
+            letter-spacing: 0.3px;
+        }
+        .opt-btn:hover { background: rgba(0,102,204,0.06); border-color: var(--blue); }
+        .opt-btn.active {
+            background: rgba(0,102,204,0.10); border-color: var(--blue);
+            color: var(--blue); font-weight: 700;
+        }
+
+        /* Data table (top-right) */
+        #data-table {
+            position: absolute; top: 100px; right: 25px; z-index: 12;
+            background: rgba(255,255,240,0.94); backdrop-filter: blur(8px);
+            border: 1px solid var(--border); border-radius: 12px;
+            padding: 14px 18px; min-width: 240px;
+            box-shadow: 0 8px 22px rgba(0,0,0,0.12);
+            font-family: 'Arial', monospace;
+            border-left: 4px solid var(--blue);
+        }
+        #data-table .title {
+            font-size: 0.78rem; font-weight: 700; letter-spacing: 2px;
+            color: var(--blue); text-transform: uppercase; margin-bottom: 8px;
+            padding-bottom: 6px; border-bottom: 1px solid var(--border);
+        }
+        #data-table .row {
+            display: flex; justify-content: space-between; gap: 14px;
+            font-size: 0.78rem; line-height: 1.65;
+        }
+        #data-table .row .lab { color: #555; font-weight: 600; letter-spacing: 0.3px; }
+        #data-table .row .val { color: #222; font-weight: 700; }
+        #data-table .row.tag { padding-top: 5px; border-top: 1px dashed rgba(0,0,0,0.1); margin-top: 4px; }
+        #data-table .pill {
+            display: inline-block; padding: 2px 7px; border-radius: 10px;
+            font-size: 0.68rem; font-weight: 700; letter-spacing: 0.5px;
+        }
+        .pill.real    { background: rgba(0,170,102,0.15); color: #00aa66; }
+        .pill.virtual { background: rgba(255,170,0,0.15);  color: #b87800; }
+        .pill.up      { background: rgba(0,102,204,0.12); color: var(--blue); }
+        .pill.inv     { background: rgba(255,46,99,0.15);  color: var(--red); }
+
+        /* Drag hint */
+        .drag-hint {
+            position: absolute; bottom: 130px; left: 50%; transform: translateX(-50%);
+            color: rgba(0,102,204,0.75); font-weight: 700; letter-spacing: 1.5px;
+            font-size: 0.72rem; pointer-events: none; z-index: 10;
+            animation: pulse 2.6s infinite;
+        }
+        @keyframes pulse { 0%, 100% {opacity: 0.45} 50% {opacity: 1} }
+    </style>
+</head>
+
+
+<body>
+    <div id="app-wrapper">
+        <div id="loader">
+            <h2>INITIALIZING UNISON...</h2>
+            <div class="loader-bar"><div class="loader-fill"></div></div>
+        </div>
+        <header>
+            <h1>Lens Optics <span>Convex / Concave Lab</span></h1>
+        </header>
+
+        <div id="obj-selector">
+            <div class="title">Object Picker</div>
+            <div class="tab-row">
+                <button class="tab-btn active" data-tab="shapes">Shapes</button>
+                <button class="tab-btn" data-tab="objects">Objects</button>
+            </div>
+            <div class="opt-row" id="shapesRow">
+                <button class="opt-btn active" data-shape="cube">Object 1</button>
+                <button class="opt-btn" data-shape="candle">Object 2</button>
+                <button class="opt-btn" data-shape="tri">Object 3</button>
+            </div>
+            <div class="opt-row" id="objectsRow" style="display:none;">
+                <button class="opt-btn" data-shape="pencil">Pencil</button>
+                <button class="opt-btn" data-shape="arrow">Arrow</button>
+                <button class="opt-btn" data-shape="stickman">Stick Man</button>
+            </div>
+        </div>
+
+        <div id="data-table">
+            <div class="title">Live Data</div>
+            <div class="row"><span class="lab">Lens</span><span class="val" id="dLensType">Convex</span></div>
+            <div class="row"><span class="lab">Focal length f</span><span class="val" id="dF">+25 cm</span></div>
+            <div class="row"><span class="lab">Radius R</span><span class="val" id="dR">25.0 cm</span></div>
+            <div class="row"><span class="lab">Object u</span><span class="val" id="dU">−40 cm</span></div>
+            <div class="row"><span class="lab">Image v</span><span class="val" id="dV">+66.7 cm</span></div>
+            <div class="row"><span class="lab">Magnification m</span><span class="val" id="dM">−1.67</span></div>
+            <div class="row"><span class="lab">Power P = 1/f</span><span class="val" id="dP">+4.00 D</span></div>
+            <div class="row tag">
+                <span class="lab">Image</span>
+                <span class="val">
+                    <span class="pill real" id="pillRV">Real</span>
+                    <span class="pill inv"  id="pillUI">Inverted</span>
+                </span>
+            </div>
+        </div>
+
+        <div class="viewport" id="canvas-container">
+            <canvas id="simCanvas"></canvas>
+            <div class="drag-hint">Drag the object along the principal axis to reposition</div>
+
+            <div class="controls-container">
+                <div class="mode-group">
+                    <button id="playBtn"  class="btn active-green playing">❚❚ Pause</button>
+                    <button id="resetBtn" class="btn active-red">↺ Reset</button>
+                </div>
+                <div class="divider"></div>
+
+                <div class="mode-group">
+                    <span class="label-tiny">LENS:</span>
+                    <button id="lensConvex"  class="btn tiny active">Convex</button>
+                    <button id="lensConcave" class="btn tiny">Concave</button>
+                </div>
+                <div class="divider"></div>
+
+                <div class="mode-group">
+                    <button id="togRoC"     class="btn tiny">R of Curvature</button>
+                    <button id="togRays"    class="btn tiny active">Principal Rays</button>
+                    <button id="togMargin"  class="btn tiny">Marginal</button>
+                </div>
+                <div class="divider"></div>
+
+                <div class="mode-group">
+                    <span class="label-tiny">OBJ N:</span>
+                    <button class="btn tiny active" data-count="1">1</button>
+                    <button class="btn tiny" data-count="2">2</button>
+                    <button class="btn tiny" data-count="3">3</button>
+                </div>
+                <div class="divider"></div>
+
+                <div class="mode-group">
+                    <span class="label-tiny">SIDE:</span>
+                    <button id="sideLeft"  class="btn tiny active">Left</button>
+                    <button id="sideRight" class="btn tiny">Right</button>
+                </div>
+                <div class="divider"></div>
+
+                <div class="slider-group">
+                    <div class="slider-header"><span>Focal f (cm)</span><span id="fDisp" class="slider-val">25</span></div>
+                    <input type="range" id="fSlider" min="8" max="80" step="1" value="25">
+                </div>
+                <div class="slider-group">
+                    <div class="slider-header"><span>Object dist (cm)</span><span id="uDisp" class="slider-val">40</span></div>
+                    <input type="range" id="uSlider" min="5" max="120" step="1" value="40">
+                </div>
+                <div class="slider-group">
+                    <div class="slider-header"><span>Object height (cm)</span><span id="hDisp" class="slider-val">8</span></div>
+                    <input type="range" id="hSlider" min="2" max="18" step="0.5" value="8">
+                </div>
+                <div class="slider-group">
+                    <div class="slider-header"><span>Sim Speed</span><span id="spdDisp" class="slider-val">1.0x</span></div>
+                    <input type="range" id="spdSlider" min="0.1" max="2.0" step="0.1" value="1.0">
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+
+<script>
+/* =========================================================================
+   LENS OPTICS — Convex / Concave Lab
+   - Thin lens equation: 1/v − 1/u = 1/f  (Cartesian sign convention)
+   - Object on left of lens: u = −d_o (d_o > 0)
+   - v = f·d_o / (d_o − f)        (signed: > 0 right of lens / real,
+                                    < 0 left of lens / virtual)
+   - m = v/u = −v/d_o
+   - Convex lens: f > 0 (converging).  Concave: f < 0 (diverging).
+   - For biconvex/biconcave with both R equal and n=1.5 (glass):
+        1/f = (n−1)·(2/R)  ⇒  R = 2·(n−1)·f = f       (since n=1.5)
+   ========================================================================= */
+
+const N_GLASS = 1.5;
+
+class LensPhysics {
+    constructor() {
+        this.type = 'convex';  // 'convex' or 'concave'
+        this.f    = 25;        // |f| in cm (sign applied via type)
+        this.u    = 40;        // object distance magnitude (cm)
+        this.hObj = 8;         // object height (cm)
+        this.side = 'left';    // 'left' or 'right' of lens (object side)
+        this.objCount = 1;     // 1, 2, or 3 — multiple objects at offsets
+        this.shape = 'cube';   // selected object visual
+    }
+
+    get fSigned() { return (this.type === 'convex') ? +this.f : -this.f; }
+    get R()       { return 2 * (N_GLASS - 1) * this.f; }     // = f for n=1.5
+    get power()   { return 100 / this.fSigned; }              // diopters (1/m)
+
+    /** Solve for image given a particular object distance d_o */
+    solveFor(d_o) {
+        const f = this.fSigned;
+        if (Math.abs(d_o - f) < 1e-3) return { v: Infinity, m: Infinity, real: true, inverted: true };
+        const v = f * d_o / (d_o - f);
+        const m = -v / d_o;
+        return { v, m, real: v > 0, inverted: m < 0 };
+    }
+
+    /** Primary object position list (cm offsets from primary u) */
+    objectOffsets() {
+        if (this.objCount === 1) return [0];
+        if (this.objCount === 2) return [0, 18];
+        return [0, 14, 28];
+    }
+}
+
+/* ================================================================
+   Renderer — draws the entire scene on a 2D canvas
+   ================================================================ */
+class Renderer {
+    constructor(canvasId, physics) {
+        this.canvas  = document.getElementById(canvasId);
+        this.ctx     = this.canvas.getContext('2d', { alpha: false });
+        this.physics = physics;
+        this.toggles = { roc: false, rays: true, marginal: false };
+        this.time    = 0;       // for arrow animation
+        this.drag    = { active: false, startX: 0, startU: 0 };
+        this.zoomAutoFit();
+    }
+
+    zoomAutoFit() {
+        const dpr = window.devicePixelRatio || 1;
+        const rect = this.canvas.parentElement.getBoundingClientRect();
+        this.canvas.width  = rect.width  * dpr;
+        this.canvas.height = rect.height * dpr;
+        this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+        this.ctx.scale(dpr, dpr);
+        this.width  = rect.width;
+        this.height = rect.height;
+        // Geometry of the optical bench
+        this.lensX  = this.width  / 2;
+        this.axisY  = this.height / 2;
+        // Pixels per cm — fits about ±150 cm horizontally
+        this.scale  = Math.max(3.0, Math.min(8.0, (this.width * 0.42) / 100));
+        this.lensH  = Math.max(160, Math.min(280, this.height * 0.40));
+    }
+
+    /* ---------- World ↔ screen ---------- */
+    cmToPx(cm) { return cm * this.scale; }
+    objectScreenX() {
+        // u in cm, positive distance from lens, on chosen side
+        const dx = this.cmToPx(this.physics.u);
+        return (this.physics.side === 'left') ? this.lensX - dx : this.lensX + dx;
+    }
+
+
+
+    /* ---------- Top-level draw ---------- */
+    draw(dt) {
+        this.time += dt;
+        const ctx = this.ctx;
+        // Soft yellow gradient backdrop
+        const g = ctx.createLinearGradient(0, 0, 0, this.height);
+        g.addColorStop(0, '#FFFDF0');
+        g.addColorStop(1, '#FFF6CC');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, this.width, this.height);
+
+        this.drawGrid();
+        this.drawPrincipalAxis();
+        this.drawOpticalCenterLine();
+        if (this.toggles.roc) this.drawRadiusOfCurvatureCircles();
+        this.drawFocalMarkers();
+
+        // Compute every object's image, draw rays first (under), then objects + images
+        const ph    = this.physics;
+        const flips = (ph.side === 'left') ? +1 : -1;       // direction to lens
+        const offs  = ph.objectOffsets();
+        const items = offs.map((off) => {
+            const d_o   = ph.u + off;
+            const sol   = ph.solveFor(d_o);
+            // Object position
+            const objX  = (ph.side === 'left') ? this.lensX - this.cmToPx(d_o)
+                                                : this.lensX + this.cmToPx(d_o);
+            const objH  = this.cmToPx(ph.hObj);
+            // Image position (always opposite-side x for real, same-side for virtual)
+            // v in lens-frame: positive = on the opposite side of object (the "image" side).
+            // To map onto screen, image x = lensX - flips * (v in px)
+            // (since "right of lens" = +flips·1 in object coords; image conventionally
+            //  goes opposite, so we use -flips)
+            const v_px  = (sol.v === Infinity) ? null : this.cmToPx(sol.v);
+            // Image x:  lensX + flips * v   (for object on left flips=+1, real v>0 ⇒ image right)
+            const imgX  = (v_px == null) ? null : this.lensX + flips * v_px;
+            const imgH  = (sol.m === Infinity) ? null : sol.m * objH;
+            return { d_o, sol, objX, objH, imgX, imgH };
+        });
+
+        // Draw rays (and their travelling arrows) for every item
+        for (const it of items) this.drawRays(it);
+
+        // Then: lens on top of rays
+        this.drawLens();
+
+        // Objects + images on top
+        for (let i = 0; i < items.length; i++) {
+            const dim = (i === 0) ? 1.0 : 0.78;
+            this.drawObject(items[i], dim);
+            this.drawImage(items[i],  dim);
+        }
+
+        // Highlight draggable primary object
+        const hot = items[0];
+        if (hot) {
+            ctx.save();
+            ctx.strokeStyle = this.drag.active ? 'rgba(0,170,102,0.9)' : 'rgba(0,102,204,0.45)';
+            ctx.lineWidth   = this.drag.active ? 2.5 : 1.5;
+            ctx.setLineDash([4, 4]);
+            ctx.strokeRect(hot.objX - 14, this.axisY - hot.objH - 6,
+                           28, hot.objH + 12);
+            ctx.restore();
+        }
+    }
+
+    /* ---------- Background grid ---------- */
+    drawGrid() {
+        const ctx = this.ctx;
+        ctx.save();
+        ctx.strokeStyle = 'rgba(0,102,204,0.05)';
+        ctx.lineWidth = 1;
+        const step = 30;
+        for (let x = 0; x < this.width;  x += step) {
+            ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, this.height); ctx.stroke();
+        }
+        for (let y = 0; y < this.height; y += step) {
+            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(this.width, y); ctx.stroke();
+        }
+        // Bench / table band
+        ctx.fillStyle = 'rgba(0,0,0,0.04)';
+        ctx.fillRect(0, this.axisY + this.lensH/2 + 18, this.width, this.height);
+        ctx.restore();
+    }
+
+    /* ---------- Principal axis ---------- */
+    drawPrincipalAxis() {
+        const ctx = this.ctx;
+        ctx.save();
+        // Bold solid stroke
+        ctx.strokeStyle = '#1a1a2e';
+        ctx.lineWidth   = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(20, this.axisY);
+        ctx.lineTo(this.width - 20, this.axisY);
+        ctx.stroke();
+        // Tiny arrowheads at both ends
+        const ah = (x, dir) => {
+            ctx.beginPath();
+            ctx.moveTo(x, this.axisY);
+            ctx.lineTo(x - dir * 10, this.axisY - 5);
+            ctx.lineTo(x - dir * 10, this.axisY + 5);
+            ctx.closePath();
+            ctx.fillStyle = '#1a1a2e';
+            ctx.fill();
+        };
+        ah(this.width - 14, +1);
+        ah(14, -1);
+        // Label
+        ctx.fillStyle = '#444';
+        ctx.font = 'bold 11px Arial';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Principal Axis', 26, this.axisY - 12);
+        ctx.restore();
+    }
+
+    /* ---------- Vertical dashed line through optical centre ---------- */
+    drawOpticalCenterLine() {
+        const ctx = this.ctx;
+        ctx.save();
+        ctx.strokeStyle = 'rgba(0,102,204,0.55)';
+        ctx.lineWidth = 1.4;
+        ctx.setLineDash([6, 5]);
+        ctx.beginPath();
+        ctx.moveTo(this.lensX, 28);
+        ctx.lineTo(this.lensX, this.height - 28);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // 'O' label at axis crossing
+        ctx.fillStyle = 'rgba(0,102,204,0.9)';
+        ctx.font = 'bold 12px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('O', this.lensX, this.axisY + 18);
+        ctx.restore();
+    }
+
+    /* ---------- Focal-point markers F, F' ---------- */
+    drawFocalMarkers() {
+        const ctx = this.ctx;
+        const ph  = this.physics;
+        const fpx = this.cmToPx(ph.f);
+        ctx.save();
+        const drawF = (x, label, sub) => {
+            ctx.fillStyle = 'rgba(0,170,102,0.9)';
+            ctx.beginPath(); ctx.arc(x, this.axisY, 4.2, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#1a1a2e';
+            ctx.font = 'bold 12px Arial'; ctx.textAlign = 'center';
+            ctx.fillText(label, x, this.axisY + 18);
+            ctx.font = '9.5px Arial'; ctx.fillStyle = '#666';
+            ctx.fillText(sub, x, this.axisY + 30);
+        };
+        // For both convex & concave we mark F (left) and F' (right) at distance |f|
+        drawF(this.lensX - fpx, 'F',  `${ph.f} cm`);
+        drawF(this.lensX + fpx, "F'", `${ph.f} cm`);
+        ctx.restore();
+    }
+
+
+
+    /* ---------- Lens (3D-looking glass) ---------- */
+    drawLens() {
+        const ctx = this.ctx;
+        const cx = this.lensX, cy = this.axisY;
+        const halfH = this.lensH / 2;
+        const isConvex = (this.physics.type === 'convex');
+        // Two-arc biconvex / biconcave outline.
+        // For convex: each face bulges outward; bulge = bulgeC.
+        // For concave: each face caves inward;     bulge = -bulgeC (mirrored arc).
+        const bulgeC = 18;     // px curvature depth per face
+        const path = new Path2D();
+        path.moveTo(cx, cy - halfH);
+        if (isConvex) {
+            // right face bulges right (+x)
+            path.bezierCurveTo(cx + bulgeC * 1.4, cy - halfH * 0.55,
+                               cx + bulgeC * 1.4, cy + halfH * 0.55,
+                               cx, cy + halfH);
+            // left face bulges left (-x)
+            path.bezierCurveTo(cx - bulgeC * 1.4, cy + halfH * 0.55,
+                               cx - bulgeC * 1.4, cy - halfH * 0.55,
+                               cx, cy - halfH);
+        } else {
+            // CONCAVE — outer rectangle outline goes wider, faces cave in
+            const rim = 14;    // edge thickness
+            path.lineTo(cx + rim, cy - halfH);
+            // right face caves toward center
+            path.bezierCurveTo(cx + rim - bulgeC * 1.4, cy - halfH * 0.45,
+                               cx + rim - bulgeC * 1.4, cy + halfH * 0.45,
+                               cx + rim, cy + halfH);
+            path.lineTo(cx - rim, cy + halfH);
+            // left face caves toward center (going up)
+            path.bezierCurveTo(cx - rim + bulgeC * 1.4, cy + halfH * 0.45,
+                               cx - rim + bulgeC * 1.4, cy - halfH * 0.45,
+                               cx - rim, cy - halfH);
+        }
+        path.closePath();
+
+        ctx.save();
+        // Soft shadow under the lens
+        ctx.shadowColor = 'rgba(0,0,0,0.18)';
+        ctx.shadowBlur = 16;
+        ctx.shadowOffsetY = 6;
+
+        // Glass body — vertical gradient + horizontal teal tint
+        const grad = ctx.createLinearGradient(cx, cy - halfH, cx, cy + halfH);
+        grad.addColorStop(0,    'rgba(180,225,250,0.88)');
+        grad.addColorStop(0.45, 'rgba(155,210,245,0.78)');
+        grad.addColorStop(0.55, 'rgba(150,205,240,0.78)');
+        grad.addColorStop(1,    'rgba(120,180,225,0.88)');
+        ctx.fillStyle = grad;
+        ctx.fill(path);
+
+        ctx.shadowColor = 'transparent';
+
+        // Inner refractive tint (horizontal)
+        ctx.save();
+        ctx.clip(path);
+        const sheen = ctx.createLinearGradient(cx - 30, cy, cx + 30, cy);
+        sheen.addColorStop(0,   'rgba(255,255,255,0.0)');
+        sheen.addColorStop(0.5, 'rgba(255,255,255,0.45)');
+        sheen.addColorStop(1,   'rgba(255,255,255,0.0)');
+        ctx.fillStyle = sheen;
+        ctx.fillRect(cx - 60, cy - halfH, 120, this.lensH);
+        ctx.restore();
+
+        // Outline
+        ctx.strokeStyle = 'rgba(0,80,160,0.55)';
+        ctx.lineWidth = 1.6;
+        ctx.stroke(path);
+
+        // Bright vertical highlight
+        ctx.save();
+        ctx.clip(path);
+        const hi = ctx.createLinearGradient(cx - 8, 0, cx + 8, 0);
+        hi.addColorStop(0,   'rgba(255,255,255,0.0)');
+        hi.addColorStop(0.5, 'rgba(255,255,255,0.55)');
+        hi.addColorStop(1,   'rgba(255,255,255,0.0)');
+        ctx.fillStyle = hi;
+        ctx.fillRect(cx - 18, cy - halfH * 0.9, 36, halfH * 1.8);
+        // Top specular spot
+        const spot = ctx.createRadialGradient(cx + 4, cy - halfH*0.6, 1, cx + 4, cy - halfH*0.6, 18);
+        spot.addColorStop(0, 'rgba(255,255,255,0.85)');
+        spot.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = spot;
+        ctx.beginPath(); ctx.arc(cx + 4, cy - halfH*0.6, 18, 0, Math.PI*2); ctx.fill();
+        ctx.restore();
+
+        // Mounting brackets (top + bottom) for "on stand" feel
+        ctx.fillStyle = '#3a3a48';
+        ctx.fillRect(cx - 14, cy - halfH - 8,  28, 8);
+        ctx.fillRect(cx - 14, cy + halfH,      28, 8);
+        // Lens-type tag
+        ctx.fillStyle = 'rgba(0,80,160,0.85)';
+        ctx.font = 'bold 11px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(isConvex ? 'CONVEX (Converging)' : 'CONCAVE (Diverging)',
+                     cx, cy - halfH - 14);
+        ctx.restore();
+    }
+
+    /* ---------- Radius of curvature circles (when toggled) ---------- */
+    drawRadiusOfCurvatureCircles() {
+        const ctx = this.ctx;
+        const ph  = this.physics;
+        const Rpx = this.cmToPx(ph.R);
+        const cx = this.lensX, cy = this.axisY;
+        const isConvex = (ph.type === 'convex');
+        ctx.save();
+        ctx.strokeStyle = 'rgba(214,58,170,0.55)';
+        ctx.lineWidth = 1.4;
+        ctx.setLineDash([6, 5]);
+        // Centre of curvature for each face — for convex, centres are on the OPPOSITE side
+        // (right face's centre is to the LEFT, left face's centre is to the RIGHT).
+        // For concave, centres are on the SAME side as the face.
+        const c1x = cx + (isConvex ? -1 : +1) * Rpx;   // right-face centre
+        const c2x = cx + (isConvex ? +1 : -1) * Rpx;   // left-face centre
+        // Full circles
+        ctx.beginPath(); ctx.arc(c1x, cy, Rpx, 0, Math.PI*2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(c2x, cy, Rpx, 0, Math.PI*2); ctx.stroke();
+        ctx.setLineDash([]);
+        // Centres (C₁, C₂)
+        ctx.fillStyle = 'rgba(214,58,170,0.95)';
+        ctx.beginPath(); ctx.arc(c1x, cy, 3.5, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(c2x, cy, 3.5, 0, Math.PI*2); ctx.fill();
+        ctx.font = 'bold 11px Arial'; ctx.textAlign = 'center';
+        ctx.fillStyle = 'rgba(140,30,110,0.95)';
+        ctx.fillText('C₁', c1x, cy - 8);
+        ctx.fillText('C₂', c2x, cy - 8);
+        // R indicator from lens centre
+        ctx.strokeStyle = 'rgba(214,58,170,0.85)';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(c1x, cy); ctx.stroke();
+        ctx.font = '10px Arial';
+        ctx.fillStyle = 'rgba(140,30,110,0.95)';
+        ctx.fillText(`R = ${ph.R.toFixed(1)} cm`, (cx + c1x) / 2, cy - 6);
+        ctx.restore();
+    }
+
+
+
+    /* ---------- Object glyph (one of 6 shapes), drawn upright ---------- */
+    drawObject(it, dim) {
+        const ctx = this.ctx;
+        const x = it.objX;
+        const baseY = this.axisY;
+        const tipY  = this.axisY - it.objH;
+        ctx.save();
+        ctx.globalAlpha = dim;
+        this._drawShape(ctx, this.physics.shape, x, baseY, tipY, /*upright*/ true, /*virtual*/ false);
+        ctx.restore();
+        // Object distance label
+        if (dim === 1.0) {
+            ctx.save();
+            ctx.fillStyle = '#0066cc';
+            ctx.font = 'bold 11px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(`u = ${it.d_o.toFixed(0)} cm`, x, baseY + 16);
+            ctx.restore();
+        }
+    }
+
+    /* ---------- Image (orange/teal, may be flipped) ---------- */
+    drawImage(it, dim) {
+        if (it.imgX == null || it.imgH == null) return;     // image at infinity
+        const ctx = this.ctx;
+        const inverted = it.sol.inverted;
+        const isVirtual = !it.sol.real;
+        const baseY = this.axisY;
+        const tipY  = this.axisY - it.imgH;     // h_image positive ⇒ tip above axis
+        ctx.save();
+        ctx.globalAlpha = dim;
+        this._drawShape(ctx, this.physics.shape, it.imgX, baseY, tipY,
+                        /*upright*/ !inverted, /*virtual*/ isVirtual);
+        ctx.restore();
+        // Image distance label
+        if (dim === 1.0) {
+            ctx.save();
+            ctx.fillStyle = isVirtual ? '#b87800' : '#00aa66';
+            ctx.font = 'bold 11px Arial';
+            ctx.textAlign = 'center';
+            const v = it.sol.v;
+            const txt = `v = ${(v >= 0 ? '+' : '')}${v.toFixed(1)} cm`;
+            ctx.fillText(txt, it.imgX, baseY + 16);
+            ctx.restore();
+        }
+    }
+
+    /* ---------- Generic glyph drawer used for both object and image ---------- */
+    _drawShape(ctx, shape, x, baseY, tipY, upright, virtual) {
+        // tipY may be above (upright) or below (inverted) the baseY.
+        // Our 'upright' parameter tells us which side of axis the tip is on.
+        // If upright = true, tip is above axis; if false, tip is below axis.
+        const sign = upright ? -1 : +1;            // pixel direction from base to tip
+        const h    = Math.abs(tipY - baseY);
+        if (h < 1) return;
+        const aTrans = virtual ? 0.55 : 1.0;       // virtual images dimmed
+        const wMain  = Math.max(6, h * 0.28);
+
+        ctx.globalAlpha = (ctx.globalAlpha || 1) * aTrans;
+        ctx.save();
+        // Move to (x, baseY) and flip vertically when inverted so the same drawing routine works
+        ctx.translate(x, baseY);
+        ctx.scale(1, sign === -1 ? 1 : -1);   // when sign = -1 (upright), keep normal; otherwise flip
+        // Now tip is at y = -h (above origin) regardless of sign.
+        const top = -h;
+
+        const stroke = '#1a1a2e';
+        const fill1  = virtual ? 'rgba(255,170,0,0.55)' : 'rgba(0,170,102,0.85)';
+        const fill2  = virtual ? 'rgba(255,200,90,0.55)' : 'rgba(40,200,140,0.85)';
+        if (shape === 'cube') {
+            ctx.fillStyle = fill1; ctx.strokeStyle = stroke; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.rect(-wMain*0.7, top, wMain*1.4, h); ctx.fill(); ctx.stroke();
+            // top inset
+            ctx.fillStyle = fill2;
+            ctx.fillRect(-wMain*0.7, top, wMain*1.4, h*0.18);
+        } else if (shape === 'candle') {
+            // tall thin column with bulb on top
+            ctx.fillStyle = fill1; ctx.strokeStyle = stroke; ctx.lineWidth = 1.5;
+            ctx.fillRect(-wMain*0.3, top + 6, wMain*0.6, h - 6);
+            ctx.strokeRect(-wMain*0.3, top + 6, wMain*0.6, h - 6);
+            ctx.beginPath(); ctx.arc(0, top + 4, wMain*0.45, 0, Math.PI*2);
+            ctx.fillStyle = fill2; ctx.fill(); ctx.stroke();
+        } else if (shape === 'tri') {
+            ctx.beginPath();
+            ctx.moveTo(0, top);
+            ctx.lineTo(-wMain*0.85, 0);
+            ctx.lineTo( wMain*0.85, 0);
+            ctx.closePath();
+            ctx.fillStyle = fill1; ctx.strokeStyle = stroke; ctx.lineWidth = 1.5;
+            ctx.fill(); ctx.stroke();
+        } else if (shape === 'pencil') {
+            // body + ferrule + tip
+            const tipL = h * 0.18;
+            ctx.fillStyle = '#f6c84c'; ctx.strokeStyle = stroke; ctx.lineWidth = 1.4;
+            ctx.fillRect(-wMain*0.35, top + tipL, wMain*0.7, h - tipL - 8);
+            ctx.strokeRect(-wMain*0.35, top + tipL, wMain*0.7, h - tipL - 8);
+            // tip (triangle)
+            ctx.beginPath();
+            ctx.moveTo(0, top);
+            ctx.lineTo(-wMain*0.35, top + tipL);
+            ctx.lineTo( wMain*0.35, top + tipL);
+            ctx.closePath();
+            ctx.fillStyle = '#e3c08a'; ctx.fill(); ctx.stroke();
+            // graphite point
+            ctx.beginPath();
+            ctx.moveTo(0, top);
+            ctx.lineTo(-wMain*0.12, top + tipL*0.45);
+            ctx.lineTo( wMain*0.12, top + tipL*0.45);
+            ctx.closePath();
+            ctx.fillStyle = '#222'; ctx.fill();
+            // ferrule + eraser at base
+            ctx.fillStyle = '#888';
+            ctx.fillRect(-wMain*0.35, -8, wMain*0.7, 5);
+            ctx.fillStyle = '#e64a64';
+            ctx.fillRect(-wMain*0.35, -3, wMain*0.7, 3);
+            ctx.strokeRect(-wMain*0.35, -8, wMain*0.7, 8);
+        } else if (shape === 'arrow') {
+            ctx.strokeStyle = stroke; ctx.lineWidth = 2.5;
+            ctx.fillStyle   = fill1;
+            // shaft
+            ctx.beginPath();
+            ctx.moveTo(0, 0); ctx.lineTo(0, top + h*0.22);
+            ctx.stroke();
+            // head
+            ctx.beginPath();
+            ctx.moveTo(0, top);
+            ctx.lineTo(-wMain*0.65, top + h*0.22);
+            ctx.lineTo( wMain*0.65, top + h*0.22);
+            ctx.closePath();
+            ctx.fill(); ctx.stroke();
+        } else if (shape === 'stickman') {
+            ctx.strokeStyle = stroke; ctx.lineWidth = 2.2; ctx.lineCap = 'round';
+            const headR = Math.max(4, h*0.13);
+            ctx.beginPath(); ctx.arc(0, top + headR, headR, 0, Math.PI*2);
+            ctx.fillStyle = fill1; ctx.fill(); ctx.stroke();
+            // body
+            ctx.beginPath();
+            ctx.moveTo(0, top + 2*headR);
+            ctx.lineTo(0, -h*0.15);
+            ctx.stroke();
+            // arms
+            ctx.beginPath();
+            ctx.moveTo(-wMain*0.7, top + h*0.42);
+            ctx.lineTo(0, top + h*0.30);
+            ctx.lineTo( wMain*0.7, top + h*0.42);
+            ctx.stroke();
+            // legs
+            ctx.beginPath();
+            ctx.moveTo(0, -h*0.15);
+            ctx.lineTo(-wMain*0.55, 0);
+            ctx.moveTo(0, -h*0.15);
+            ctx.lineTo( wMain*0.55, 0);
+            ctx.stroke();
+        }
+        ctx.restore();
+    }
+
+
+
+    /* ---------- Ray tracing ---------- */
+    drawRays(it) {
+        if (!this.toggles.rays && !this.toggles.marginal) return;
+        const ph = this.physics;
+        const f  = ph.fSigned;
+        const fpx = this.cmToPx(ph.f);
+        const cx  = this.lensX, cy = this.axisY;
+        const halfH = this.lensH / 2;
+
+        const Ox = it.objX, Oy = this.axisY - it.objH;
+        const flips = (ph.side === 'left') ? +1 : -1;            // +1: object on left
+
+        // Image position on screen
+        let Ix = it.imgX, Iy = it.imgH != null ? this.axisY - it.imgH : null;
+        // Foci on screen
+        const F1x = cx - flips * fpx;       // near focus on object side  (for convex)
+        const F2x = cx + flips * fpx;       // far focus on image side    (for convex)
+        // For concave (f<0) "F2" is actually on the same side as the object — handled
+        // by sign of fSigned in formulas; visually we use F1/F2 markers as drawn.
+
+        const ctx = this.ctx;
+        ctx.save();
+        ctx.lineWidth = 1.4;
+
+        const rays = [];   // collected ray paths for arrow animation
+
+        // ---- Principal rays ----
+        if (this.toggles.rays) {
+            // Ray A — parallel to axis, then through F2 (or appearing to come from F2 for concave)
+            //   From object: (Ox, Oy) → (cx, Oy)
+            //   After lens: passes through (F2x, axisY) with slope (axisY - Oy) / (F2x - cx)
+            //   i.e. line from (cx, Oy) towards (F2x, axisY).
+            const rayA = this._rayParallel(Ox, Oy, cx, Oy, F2x, cy, flips, ph, Ix, Iy);
+            rays.push({ ...rayA, color: 'rgba(0,102,204,0.9)' });
+
+            // Ray B — through optical centre (straight line)
+            const rayB = this._rayThroughCenter(Ox, Oy, cx, cy, flips, Ix, Iy);
+            rays.push({ ...rayB, color: 'rgba(0,170,102,0.9)' });
+
+            // Ray C — through near focus F1, emerges parallel to axis
+            const rayC = this._rayThroughFocus(Ox, Oy, cx, F1x, cy, halfH, flips, Ix, Iy, ph);
+            rays.push({ ...rayC, color: 'rgba(214,58,170,0.9)' });
+        }
+
+        // ---- Marginal rays ----
+        if (this.toggles.marginal) {
+            // Two rays from object to the top and bottom edges of the lens, then to image.
+            // For ideal thin lens, all rays from one object point converge to the image point.
+            const lensTop = cy - halfH * 0.85;
+            const lensBot = cy + halfH * 0.85;
+            const mk = (lensY) => {
+                if (Ix == null || Iy == null) {
+                    // Image at infinity — extend out far
+                    const dx = (cx - Ox) * 6;
+                    return { segs: [
+                        { ax: Ox, ay: Oy, bx: cx, by: lensY, dashed: false },
+                        { ax: cx, ay: lensY, bx: cx + flips * dx, by: lensY + (lensY - Oy) * 6, dashed: false }
+                    ], color: 'rgba(255,136,0,0.85)' };
+                }
+                const segs = [
+                    { ax: Ox, ay: Oy, bx: cx, by: lensY, dashed: false }
+                ];
+                if (it.sol.real) {
+                    segs.push({ ax: cx, ay: lensY, bx: Ix, by: Iy, dashed: false });
+                } else {
+                    // Virtual image: solid extension forward; dashed back to virtual image
+                    const dx = (Ix - cx) * -1.2;
+                    const tx = cx - flips * Math.abs(dx) * 1.1;
+                    const ty = lensY + (lensY - Iy) * 1.1;
+                    segs.push({ ax: cx, ay: lensY, bx: tx, by: ty, dashed: false });
+                    segs.push({ ax: cx, ay: lensY, bx: Ix, by: Iy, dashed: true });
+                }
+                return { segs, color: 'rgba(255,136,0,0.85)' };
+            };
+            rays.push(mk(lensTop));
+            rays.push(mk(lensBot));
+        }
+
+        // Render each ray and its travelling arrows
+        for (const r of rays) this._renderRay(r);
+        ctx.restore();
+    }
+
+    /* ---- Helpers for principal rays ---- */
+    _rayParallel(Ox, Oy, lensInX, lensY, F2x, cy, flips, ph, Ix, Iy) {
+        // Pre: Object → lens at Oy
+        // Post: from (lensInX, Oy) to image (Ix, Iy) for real image, or
+        //       in concave/virtual cases, to a far point in the same direction.
+        const segs = [{ ax: Ox, ay: Oy, bx: lensInX, by: lensY, dashed: false }];
+        if (Ix != null && ph.solveFor(Math.abs(ph.u)).real) {
+            segs.push({ ax: lensInX, ay: lensY, bx: Ix, by: Iy, dashed: false });
+        } else {
+            // Direction from (lensInX, lensY) towards F2
+            const dx = F2x - lensInX, dy = cy - lensY;
+            const k  = (Math.max(this.width, 600)) / Math.hypot(dx, dy || 1);
+            const tx = lensInX + dx * k, ty = lensY + dy * k;
+            segs.push({ ax: lensInX, ay: lensY, bx: tx, by: ty, dashed: false });
+            // Backward extension to virtual image (dashed)
+            if (Ix != null) {
+                segs.push({ ax: lensInX, ay: lensY, bx: Ix, by: Iy, dashed: true });
+            }
+        }
+        return { segs };
+    }
+
+    _rayThroughCenter(Ox, Oy, cx, cy, flips, Ix, Iy) {
+        // Straight line through (cx, cy) — extend to image x
+        const segs = [];
+        // Use one straight line from object to either image (real) or far away
+        const targetX = (Ix != null) ? Ix : (cx + flips * Math.max(this.width, 600));
+        const t = (targetX - Ox) / (cx - Ox || 1);
+        const targetY = Oy + (cy - Oy) * t;
+        segs.push({ ax: Ox, ay: Oy, bx: targetX, by: targetY, dashed: false });
+        // If virtual, dashed extension is unnecessary (the line already hits virtual image)
+        return { segs };
+    }
+
+    _rayThroughFocus(Ox, Oy, cx, F1x, cy, halfH, flips, Ix, Iy, ph) {
+        // Ray heading toward F1 (object-side focus) before lens, parallel to axis after.
+        // Find where it crosses lens at x = cx.
+        const dx = F1x - Ox, dy = cy - Oy;
+        // hit y at lens
+        const t  = (cx - Ox) / dx;
+        const hitY = Oy + dy * t;
+        const segs = [{ ax: Ox, ay: Oy, bx: cx, by: hitY, dashed: false }];
+        // After lens — parallel to axis (constant y = hitY)
+        const farX = cx + flips * Math.max(this.width, 600);
+        segs.push({ ax: cx, ay: hitY, bx: farX, by: hitY, dashed: false });
+        // For virtual images, mark dashed extension to image position
+        if (Ix != null && Iy != null && !ph.solveFor(Math.abs(ph.u)).real) {
+            segs.push({ ax: cx, ay: hitY, bx: Ix, by: Iy, dashed: true });
+        }
+        return { segs };
+    }
+
+    /* ---- Render a single ray with solid+dashed segments + travelling arrows ---- */
+    _renderRay(ray) {
+        const ctx = this.ctx;
+        // Compute total path length (solid only, for arrow animation)
+        const solid = ray.segs.filter(s => !s.dashed);
+        const lens  = solid.map(s => Math.hypot(s.bx - s.ax, s.by - s.ay));
+        const total = lens.reduce((a, b) => a + b, 0);
+        if (total < 1) return;
+
+        // Draw solid then dashed
+        for (const s of ray.segs) {
+            ctx.save();
+            ctx.strokeStyle = ray.color;
+            ctx.lineWidth = s.dashed ? 1.2 : 1.6;
+            if (s.dashed) ctx.setLineDash([5, 4]);
+            ctx.beginPath(); ctx.moveTo(s.ax, s.ay); ctx.lineTo(s.bx, s.by); ctx.stroke();
+            ctx.restore();
+        }
+
+        // Travelling arrowheads — N evenly-spaced positions sliding along the solid path
+        const N = 4;
+        const phase = (this.time * 90) % total;       // 90 px/sec base
+        for (let i = 0; i < N; i++) {
+            const s = (phase + i * total / N) % total;
+            const p = this._sampleSolidPath(solid, lens, s);
+            if (!p) continue;
+            this._drawTinyArrow(ctx, p.x, p.y, p.angle, ray.color);
+        }
+    }
+
+    _sampleSolidPath(segs, lens, s) {
+        let acc = 0;
+        for (let i = 0; i < segs.length; i++) {
+            const L = lens[i];
+            if (s <= acc + L) {
+                const t = (s - acc) / Math.max(0.001, L);
+                const seg = segs[i];
+                const x = seg.ax + (seg.bx - seg.ax) * t;
+                const y = seg.ay + (seg.by - seg.ay) * t;
+                const angle = Math.atan2(seg.by - seg.ay, seg.bx - seg.ax);
+                return { x, y, angle };
+            }
+            acc += L;
+        }
+        return null;
+    }
+
+    _drawTinyArrow(ctx, x, y, angle, color) {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(angle);
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(-7, -3.5);
+        ctx.lineTo(-7,  3.5);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+    }
+}
+
+
+
+/* =====================================================================
+   App — orchestrates UI, drag, animation loop
+   ===================================================================== */
+class App {
+    constructor() {
+        this.physics  = new LensPhysics();
+        this.renderer = new Renderer('simCanvas', this.physics);
+        this.state    = { playing: true, speed: 1.0 };
+        this.lastT    = 0;
+
+        this.initUI();
+        this.bindEvents();
+        this.applySliders();
+        this.refreshData();
+        requestAnimationFrame((t) => this.loop(t));
+    }
+
+    initUI() {
+        this.els = {
+            // play group
+            play:   document.getElementById('playBtn'),
+            reset:  document.getElementById('resetBtn'),
+            // lens
+            lensConvex:  document.getElementById('lensConvex'),
+            lensConcave: document.getElementById('lensConcave'),
+            // toggles
+            togRoC:    document.getElementById('togRoC'),
+            togRays:   document.getElementById('togRays'),
+            togMargin: document.getElementById('togMargin'),
+            // side
+            sideLeft:  document.getElementById('sideLeft'),
+            sideRight: document.getElementById('sideRight'),
+            // sliders
+            sF: document.getElementById('fSlider'),
+            sU: document.getElementById('uSlider'),
+            sH: document.getElementById('hSlider'),
+            sSpd: document.getElementById('spdSlider'),
+            dF: document.getElementById('fDisp'),
+            dU: document.getElementById('uDisp'),
+            dH: document.getElementById('hDisp'),
+            dSpd: document.getElementById('spdDisp'),
+            // counts (collected by data attr)
+            countBtns: document.querySelectorAll('[data-count]'),
+            // tabs
+            tabBtns: document.querySelectorAll('.tab-btn'),
+            optBtns: document.querySelectorAll('.opt-btn'),
+            shapesRow:  document.getElementById('shapesRow'),
+            objectsRow: document.getElementById('objectsRow'),
+            // data
+            dLensType: document.getElementById('dLensType'),
+            dFv: document.getElementById('dF'),
+            dRv: document.getElementById('dR'),
+            dUv: document.getElementById('dU'),
+            dVv: document.getElementById('dV'),
+            dMv: document.getElementById('dM'),
+            dPv: document.getElementById('dP'),
+            pillRV: document.getElementById('pillRV'),
+            pillUI: document.getElementById('pillUI')
+        };
+    }
+
+    applySliders() {
+        const ph = this.physics;
+        ph.f    = parseFloat(this.els.sF.value);
+        ph.u    = parseFloat(this.els.sU.value);
+        ph.hObj = parseFloat(this.els.sH.value);
+        this.state.speed = parseFloat(this.els.sSpd.value);
+
+        this.els.dF.textContent = ph.f;
+        this.els.dU.textContent = ph.u;
+        this.els.dH.textContent = ph.hObj;
+        this.els.dSpd.textContent = this.state.speed.toFixed(1) + 'x';
+    }
+
+    bindEvents() {
+        // Sliders
+        [this.els.sF, this.els.sU, this.els.sH, this.els.sSpd].forEach(s => {
+            s.addEventListener('input', () => { this.applySliders(); this.refreshData(); });
+        });
+
+        // Play / Reset
+        this.els.play.onclick = () => {
+            this.state.playing = !this.state.playing;
+            this.els.play.classList.toggle('playing', this.state.playing);
+            this.els.play.textContent = this.state.playing ? '❚❚ Pause' : '▶ Play';
+        };
+        this.els.reset.onclick = () => {
+            this.physics.f = 25; this.physics.u = 40; this.physics.hObj = 8;
+            this.physics.type = 'convex'; this.physics.objCount = 1; this.physics.side = 'left';
+            this.els.sF.value = 25; this.els.sU.value = 40; this.els.sH.value = 8;
+            this.applySliders();
+            this._setLens('convex');
+            this._setSide('left');
+            this._setCount(1);
+            this.refreshData();
+        };
+
+        // Lens type
+        this.els.lensConvex.onclick  = () => this._setLens('convex');
+        this.els.lensConcave.onclick = () => this._setLens('concave');
+
+        // Toggles
+        this.els.togRoC.onclick    = () => {
+            this.renderer.toggles.roc = !this.renderer.toggles.roc;
+            this.els.togRoC.classList.toggle('active', this.renderer.toggles.roc);
+        };
+        this.els.togRays.onclick   = () => {
+            this.renderer.toggles.rays = !this.renderer.toggles.rays;
+            this.els.togRays.classList.toggle('active', this.renderer.toggles.rays);
+        };
+        this.els.togMargin.onclick = () => {
+            this.renderer.toggles.marginal = !this.renderer.toggles.marginal;
+            this.els.togMargin.classList.toggle('active', this.renderer.toggles.marginal);
+        };
+
+        // Side
+        this.els.sideLeft.onclick  = () => this._setSide('left');
+        this.els.sideRight.onclick = () => this._setSide('right');
+
+        // Object count
+        this.els.countBtns.forEach(btn => {
+            btn.onclick = () => this._setCount(parseInt(btn.dataset.count));
+        });
+
+        // Object selector tabs
+        this.els.tabBtns.forEach(btn => {
+            btn.onclick = () => {
+                this.els.tabBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const isShapes = btn.dataset.tab === 'shapes';
+                this.els.shapesRow.style.display  = isShapes ? 'flex' : 'none';
+                this.els.objectsRow.style.display = isShapes ? 'none' : 'flex';
+            };
+        });
+        // Object choice
+        this.els.optBtns.forEach(btn => {
+            btn.onclick = () => {
+                // active only within its own row
+                const row = btn.parentElement;
+                row.querySelectorAll('.opt-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                this.physics.shape = btn.dataset.shape;
+                // also clear active on the OTHER row so only one shape is "selected"
+                const otherRow = (row === this.els.shapesRow) ? this.els.objectsRow : this.els.shapesRow;
+                otherRow.querySelectorAll('.opt-btn').forEach(b => b.classList.remove('active'));
+            };
+        });
+
+        // Drag the primary object on the canvas
+        const cv = this.renderer.canvas;
+        cv.onmousedown = (e) => {
+            const rect = cv.getBoundingClientRect();
+            const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+            const ox = this.renderer.objectScreenX();
+            const oy = this.renderer.axisY - this.renderer.cmToPx(this.physics.hObj);
+            // Hit test: rectangle around the object
+            if (mx > ox - 22 && mx < ox + 22 && my > oy - 10 && my < this.renderer.axisY + 10) {
+                this.renderer.drag.active = true;
+                this.renderer.drag.startX = mx;
+                this.renderer.drag.startU = this.physics.u;
+            }
+        };
+        window.addEventListener('mousemove', (e) => {
+            if (!this.renderer.drag.active) return;
+            const rect = cv.getBoundingClientRect();
+            const mx = e.clientX - rect.left;
+            const dx = mx - this.renderer.drag.startX;
+            const dCm = dx / this.renderer.scale;
+            // Drag farther from lens = larger u, drag closer = smaller u
+            const dirOnLeftSide = (this.physics.side === 'left') ? -1 : +1;
+            let newU = this.renderer.drag.startU + dirOnLeftSide * dCm;
+            newU = Math.max(parseFloat(this.els.sU.min), Math.min(parseFloat(this.els.sU.max), newU));
+            this.physics.u = newU;
+            this.els.sU.value = newU.toFixed(1);
+            this.els.dU.textContent = Math.round(newU);
+            this.refreshData();
+        });
+        window.addEventListener('mouseup', () => { this.renderer.drag.active = false; });
+
+        // Tab visibility = pause-when-minimized
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) { this._wasPlaying = this.state.playing; this.state.playing = false; }
+            else { if (this._wasPlaying) {
+                this.state.playing = true;
+                this.els.play.classList.add('playing');
+                this.els.play.textContent = '❚❚ Pause';
+            } this.lastT = 0; }
+        });
+        // Resize
+        window.addEventListener('resize', () => this.renderer.zoomAutoFit());
+    }
+
+    _setLens(type) {
+        this.physics.type = type;
+        this.els.lensConvex.classList.toggle('active',  type === 'convex');
+        this.els.lensConcave.classList.toggle('active', type === 'concave');
+        this.refreshData();
+    }
+    _setSide(side) {
+        this.physics.side = side;
+        this.els.sideLeft.classList.toggle('active',  side === 'left');
+        this.els.sideRight.classList.toggle('active', side === 'right');
+        this.refreshData();
+    }
+    _setCount(n) {
+        this.physics.objCount = n;
+        this.els.countBtns.forEach(b => {
+            b.classList.toggle('active', parseInt(b.dataset.count) === n);
+        });
+        this.refreshData();
+    }
+
+    /* ---------- Live data table ---------- */
+    refreshData() {
+        const ph = this.physics;
+        const sol = ph.solveFor(ph.u);
+        const fSign = (ph.type === 'convex' ? '+' : '−');
+        this.els.dLensType.textContent = (ph.type === 'convex') ? 'Convex (Converging)' : 'Concave (Diverging)';
+        this.els.dFv.textContent = `${fSign}${ph.f} cm`;
+        this.els.dRv.textContent = `${ph.R.toFixed(1)} cm`;
+        // u is negative in Cartesian convention (object on left of lens)
+        const uSign = (ph.side === 'left') ? '−' : '+';
+        this.els.dUv.textContent = `${uSign}${ph.u} cm`;
+        if (sol.v === Infinity) {
+            this.els.dVv.textContent = '∞';
+            this.els.dMv.textContent = '∞';
+        } else {
+            this.els.dVv.textContent = `${sol.v >= 0 ? '+' : ''}${sol.v.toFixed(1)} cm`;
+            this.els.dMv.textContent = `${sol.m >= 0 ? '+' : ''}${sol.m.toFixed(2)}`;
+        }
+        this.els.dPv.textContent = `${ph.power >= 0 ? '+' : ''}${ph.power.toFixed(2)} D`;
+        // Pills
+        this.els.pillRV.textContent = sol.real ? 'Real' : 'Virtual';
+        this.els.pillRV.className   = 'pill ' + (sol.real ? 'real' : 'virtual');
+        this.els.pillUI.textContent = sol.inverted ? 'Inverted' : 'Upright';
+        this.els.pillUI.className   = 'pill ' + (sol.inverted ? 'inv' : 'up');
+    }
+
+    loop(t) {
+        if (!this.lastT) this.lastT = t;
+        let dt = (t - this.lastT) / 1000;
+        this.lastT = t;
+        if (dt > 0.05) dt = 0.05;
+        if (this.state.playing) {
+            this.renderer.draw(dt * this.state.speed);
+        } else {
+            // Still draw, but freeze the arrow phase
+            this.renderer.draw(0);
+        }
+        requestAnimationFrame((t) => this.loop(t));
+    }
+}
+
+/* ---------- Bootstrap (loader + scaling wrapper) ---------- */
+document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => {
+        const loader = document.getElementById('loader');
+        if (loader) {
+            loader.style.opacity = '0';
+            setTimeout(() => loader.remove(), 600);
+        }
+    }, 800);
+
+    const app = new App();
+
+    function resizeAppWrapper() {
+        const ww = window.innerWidth, wh = window.innerHeight;
+        const baseW = 1400, baseH = 800;
+        const scale = Math.min(ww / baseW, wh / baseH);
+        const wrap = document.getElementById('app-wrapper');
+        if (wrap) {
+            wrap.style.width  = (ww / scale) + 'px';
+            wrap.style.height = (wh / scale) + 'px';
+            wrap.style.transform = `scale(${scale})`;
+        }
+        app.renderer.zoomAutoFit();
+        app.refreshData();
+    }
+    window.addEventListener('resize', resizeAppWrapper);
+    resizeAppWrapper();
+});
+</script>
+</body>
+</html>
